@@ -1,5 +1,4 @@
-[README-GITHUB.md](https://github.com/user-attachments/files/32321335/README-GITHUB.md)
-# TagCat# TagCat
+# TagCat
 
 A Windows desktop app for tagging, sorting and de-duplicating photos, videos and audio.
 
