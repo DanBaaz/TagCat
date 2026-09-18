@@ -16,7 +16,7 @@ are still there. Any other program that can read a filename can read your tags.
 
 ## Installing
 
-Download the latest `TagCat-Setup.exe` and run it.
+Download the latest `TagCat-Setup *vX.XXX.XXX.exe` and run it.
 
 The installer checks whether your machine already has what TagCat needs and downloads only
 what's missing:
