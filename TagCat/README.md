@@ -1,141 +1,282 @@
-# TagCat
+# TagCat (v0.61.19)
 
-A Windows desktop app for tagging, sorting and de-duplicating photos, videos and audio.
+A native Windows desktop app (WPF, .NET 9) for tagging and sorting photos and videos.
 
-Tags are stored **in the filename itself**, in square brackets:
+Tags live **in the filename**, in the format:
 
 ```
 myphoto [beach sunset family].jpg
 ```
 
-That means there is no database to corrupt, no sidecar files, and no lock-in. Your tags travel
-with the file — copy it to another drive, back it up, open it on another machine, and the tags
-are still there. Any other program that can read a filename can read your tags.
-
----
-
-## Installing
-
-Download the latest `TagCat-Setup.exe` from the
-[Releases](../../releases) page and run it.
-
-The installer checks whether your machine already has what TagCat needs and downloads only
-what's missing:
-
-- **.NET 9 Desktop Runtime** — required to run the app.
-- **VLC** — used for video and audio playback. If you already have VLC installed, TagCat uses
-  it and downloads nothing.
-
-It will tell you what it's about to download and ask before doing it. Declining still installs
-TagCat; you'd just need to install the missing piece yourself afterwards.
-
-**Requirements:** Windows 10 or 11, 64-bit.
-
-Uninstall via **Settings → Apps → Installed apps**, or right-click TagCat in the Start Menu.
-
----
-
 ## Features
 
-### Tagging
+- Browse a folder (optionally including subfolders) and see real Windows-Explorer-style
+  thumbnails for both images and videos — no ffmpeg or extra tools needed.
+- Click any file to edit its tags in a text box; saving renames the file on disk.
+- Sort the file list by **name**, **date modified**, or **date created**, ascending or descending.
+- Filter by tags with a checklist: check one tag and the list narrows to files with that tag;
+  the remaining checkboxes update to show only tags that still occur among the narrowed-down
+  files (with a live count), so you can keep drilling down. Checked tags act as an AND filter.
+- "Organize Visible Files" moves whatever is currently shown (after your filters) into
+  subfolders — grouped by the selected tags, by year, by year-month, or by first letter of
+  the filename.
+- **Tag Library** (bottom of the Tags panel) is a vocabulary of tags kept independently of
+  any folder, so autocomplete can suggest tags from your whole collection. Manage it from
+  "Tag Library..." - add tags used in the current folder, or type new ones in directly,
+  and remove ones you no longer want suggested.
+- **Folder Options** (toolbar) holds the "Include subfolders" checkbox, exclude-specific-subfolders,
+  and "Show Folders in Thumbnail Pane" - which puts folder icons in the file grid so you can click
+  into a subfolder one level at a time, with an up-arrow to go back, like a simple file browser.
+  While that's on, Include Subfolders doesn't apply, since you're navigating by hand instead.
+  Click Apply to reload with the new settings.
+- **Advanced Filtering** (below Filter by tags) holds a **Match All / Any** toggle, an
+  **Exclude tags** checklist, and a **Boolean Tags** popup for expressions the checklist can't
+  express, e.g. `beach AND (sunset OR sunrise) AND NOT blurry`. Unknown tag names are flagged
+  as errors rather than silently matching nothing. All of it composes with the plain checklist
+  above rather than replacing it.
+- **Filter by type and size** — tick file types, and set a minimum and/or maximum file size.
+- **Search box** above the filter pane: multi-word, any order, case-insensitive, matched against
+  the filename.
+- **Folder bookmarks** in the Select Folder(s) dropdown, with Ctrl+click to select and load
+  several bookmarked folders at once.
+- **Media viewer popup** — double-click or press Enter on a tile to open images, video or audio
+  full-window, with arrow keys and the scroll wheel to move between files, a Loop toggle, and
+  F11 for full screen. The thumbnail pane follows along as you navigate. Settings chooses
+  between this and the system default app.
+- **Thumbnail cache** so reopening a folder doesn't regenerate every thumbnail. Configurable
+  folder, clear-on-exit, and an off switch in Settings; safe to delete at any time.
+- **Undo** (Ctrl+Z) for tag operations, session-scoped.
+- **Duplicate Finder** (right-hand panel → Duplicate Tools) finds duplicate videos, images and
+  audio. Opens in its own window and scans folders you pick there, so you can carry on tagging
+  while it runs. See "Duplicate Finder" below.
 
-- Click a file, type tags, save — the file is renamed on disk. Nothing else changes.
-- **Autocomplete** as you type, drawn from tags in the current folder, a saved **Tag Library**,
-  or both.
-- Add or remove tags across **many files at once** from a multi-selection.
-- **Undo** (`Ctrl+Z`) for tag operations within a session.
-- Filename length and invalid-character checks, with collisions reported rather than silently
-  overwriting anything.
+## Requirements to build
 
-### Browsing and filtering
+- Windows 10/11
+- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) (the SDK installer on Windows
+  includes everything needed for WPF/WinForms — no separate workload install required). Bumped
+  from .NET 8 in v0.12 because multi-folder select in the folder picker relies on
+  `FolderBrowserDialog.Multiselect`, which only shipped starting in .NET 9. If `dotnet run`
+  complains it can't find a matching SDK, this is almost certainly why — install the .NET 9 SDK
+  from the link above (existing .NET 8 apps on your machine are unaffected).
+- The target framework is `net9.0-windows10.0.19041.0`, not plain `net9.0-windows`. The Windows
+  SDK version is pinned because the Duplicate Finder decodes frames through WinRT
+  (`Windows.Media.Editing`, `Windows.Graphics.Imaging`, `Windows.Storage`), and those namespaces
+  are only projected into the project when an SDK version is specified.
+- An internet connection the first time you build, so NuGet can download the LibVLC engine used
+  for video preview (~90 MB) — see "Video preview" below.
 
-- Explorer-style thumbnails for images and video, generated by Windows itself — no ffmpeg or
-  extra codecs needed for the common formats.
-- **Search** across filenames, multi-word, any order.
-- **Filter by tag** with a live checklist showing how many files carry each tag, narrowing as
-  you drill down. Match **all** ticked tags or **any** of them.
-- **Advanced filtering** — exclude specific tags, and a **Boolean filter** for expressions the
-  checklist can't express:
+## Build & run
 
-  ```
-  beach AND (sunset OR sunrise) AND NOT blurry
-  ```
+Open a terminal in this folder and run:
 
-- **Filter by file type and size**, with configurable minimum and maximum.
-- Sort by name, date modified, date created, size, or random.
-- **Folder bookmarks** for folders you return to, with Ctrl+click to load several at once.
-- Optional folder-browsing mode that puts folders in the thumbnail grid, so you can navigate
-  down through a tree by hand.
+```
+dotnet run
+```
 
-### Viewing
+That will restore, build, and launch the app in one step for quick testing.
 
-- Built-in **viewer** for images, video and audio, with keyboard and scroll-wheel navigation,
-  looping, and full screen.
-- Inline preview pane with click-to-expand to native resolution.
+## Build a standalone .exe
 
-### Organising
+To produce a single portable `.exe` you can copy anywhere (no .NET install required on the
+target machine, since the project is already configured as self-contained):
 
-- **Organize Visible Files** moves whatever is currently on screen — after all your filters —
-  into subfolders, grouped by tag, year, year-month, or first letter.
-- Move, copy, or recycle files directly from the grid.
+```
+dotnet publish -c Release -r win-x64 --self-contained true
+```
 
-### Duplicate Finder
+The executable will be at:
 
-A full duplicate finder is built in, under **Duplicate Tools** in the right-hand panel. It runs
-in its own window so you can keep tagging while it scans.
+```
+bin\Release\net9.0-windows10.0.19041.0\win-x64\publish\TagCat.exe
+```
 
-Four scan modes:
+## Video preview
 
-| Mode | What it finds | Speed |
-|---|---|---|
-| **Express** | Byte-for-byte identical copies, by checksum | Fastest |
-| **Quick** | Re-encodes, resolution changes | Fast |
-| **Balanced** | Also light crops and trims | Recommended |
-| **Thorough** | Heavy crops, short clips cut from longer videos | Slow |
+Video playback in the app uses [LibVLC](https://www.videolan.org/vlc/libvlc.html) (the engine
+behind VLC), via the LibVLCSharp NuGet packages, rather than Windows' built-in `MediaElement`.
+This is a deliberate choice: `MediaElement` depends on codecs bundled with Windows Media Player,
+which often aren't installed on modern Windows (especially the "N"/"KN" editions) and never
+support formats like `.webm` at all. LibVLC brings its own decoders, so playback works
+consistently regardless of what's installed on the machine, across mp4, webm, mkv, mov, avi, wmv,
+and more.
 
-- **Express** compares file content directly, so a match is provably identical. It's the only
-  mode that works on **audio**, since it never needs to decode anything. Optional extra
-  restrictions by filename and timestamps, plus a file size range.
-- **Quick / Balanced / Thorough** compare what the video actually *looks like*, using perceptual
-  frame hashing — so they still match a copy that's been re-encoded, resized, cropped,
-  letterboxed or trimmed. Works on images too, treating a still as a single-frame video.
-- Results are grouped, with a **suggested keeper** per group and a preview of every file.
-  Partial matches (a clip vs. the full video) are flagged, since those aren't interchangeable.
-- **Deletion always goes through the Recycle Bin**, only for files you tick, with a guard
+This does mean the first `dotnet build`/`dotnet run` will download the LibVLC native binaries
+(~90 MB) from NuGet, and a self-contained publish will bundle them into your output folder — the
+published app is noticeably larger as a result, but doesn't require anything extra to be
+installed on the machine you run it on. LibVLC is LGPL-2.1-or-later licensed; that applies if you
+plan to redistribute this app.
+
+## Versioning
+
+TagCat and the Duplicate Finder are versioned **separately**, since DF started life as its own
+app and still moves at its own pace. Both are shown in Settings > About, each with its own
+changelog, and both appear in the release zip's filename. The current versions are
+**TagCat v0.61** and **Duplicate Finder v0.19**.
+
+A release only bumps the version of whichever actually changed - a DF-only fix leaves TagCat's
+version alone, and vice versa.
+
+When bumping:
+- `private const string AppVersion` in `MainWindow.xaml.cs`, the `<Run Text="v..."/>` footer in
+  `MainWindow.xaml`, `<Version>`/`<AssemblyVersion>`/`<FileVersion>`/`<InformationalVersion>` in
+  `TagCat.csproj`, `#define MyAppVersion` in `TagCat.iss`, and this README's title line.
+- For DF: `internal const string DedupeVersion` in `VideoDedupe/DuplicateFinderWindow.xaml.cs`,
+  and `#define MyDedupeVersion` in `TagCat.iss`.
+- Release filenames use the combined form `v0.<TagCat>.<DF>` - so v0.58 with DF v0.19 gives
+  `TagCat_v0.58.19.zip` and `TagCat-Setup v0.58.19.exe`. The installer builds its own name from
+  the two `#define`s, so it stays correct as long as those are bumped.
+- Add an entry at the top of the relevant changelog - `TagCatChangelogText` or
+  `DuplicateFinderChangelogText`, both near the bottom of `MainWindow.xaml.cs`. Keep entries
+  short: what changed, not why.
+
+Check the existing value before bumping rather than assuming what it is - they have drifted
+apart before.
+
+## Troubleshooting: "the exe doesn't do anything"
+
+The app just rebuilt with global error handlers, so update your copy (see Build steps above)
+and try again — if it fails now, you should get a message box explaining why instead of nothing
+happening. A few other things to check:
+
+1. **Run it from a terminal, not by double-clicking**, so you can see any output:
+   ```
+   cd bin\Release\net9.0-windows10.0.19041.0\win-x64\publish
+   .\TagCat.exe
+   ```
+2. **Try the non-published version first** to rule out a packaging issue:
+   ```
+   dotnet run
+   ```
+   If this works but the published `.exe` doesn't, try publishing without single-file packaging,
+   which is sometimes flaky with WPF resource loading:
+   ```
+   dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false
+   ```
+   Then run `TagCat.exe` from that publish folder (it'll come with a bunch of `.dll` files
+   alongside it — that's expected).
+3. **Check Windows Event Viewer**: `Windows Logs > Application`, look for a red error from
+   source `.NET Runtime` or `Application Error` around the time you ran it — the message usually
+   names the exact exception.
+4. **SmartScreen / antivirus**: since this isn't a signed, publicly-distributed exe, Windows
+   Defender or SmartScreen may silently quarantine or block it on first run. Check your
+   antivirus's recent-activity/quarantine list.
+
+
+- Supported extensions are listed in `Services/LibraryService.cs` (`SupportedExt`) — add more
+  if you shoot in a format not covered (e.g. RAW formats).
+- The tag delimiter inside the brackets is a single space; if you'd rather use commas, that's
+  a one-line change in `Models/TagParser.cs` and `MainWindow.xaml.cs`.
+- "Organize" **moves** files (not copies). Try it on a test folder first if you want to be safe.
+
+## Duplicate Finder
+
+Merged in at v0.20 from what was previously a separate app (its own history ran to v0.05, kept
+in `VideoDedupe/`). Open it from the right-hand panel under **Duplicate Tools**.
+
+Scans one or more folders (Browse is multi-select; the box takes a semicolon-separated list you
+can edit by hand), and opens pre-filled with whatever folders TagCat currently has loaded.
+A file reachable from two listed folders is only scanned once.
+
+Use the **Look for duplicate** checkboxes to choose videos, images, audio, or a combination.
+Audio is only available in Express mode - see below.
+
+There are four scan modes. **Express** works differently from the other three: it checksums
+file content, so it only finds byte-for-byte identical copies, but a match is provable rather
+than a judgement call, it works on any file type including audio, and it is by far the fastest.
+Files are only read at all if another file already shares their exact size, which is most of
+why. Its own options panel adds optional restrictions by filename and created/modified
+timestamps, plus a file size range - all off by default, since the checksum alone is already a
+complete answer.
+
+**Quick / Balanced / Thorough** compare files by content rather than by hash, so they still
+match a copy that has been re-encoded, resized, cropped, letterboxed or trimmed:
+
+1. Frames are sampled and reduced to greyscale, then normalised to a fixed grid — this is what
+   makes resolution, aspect ratio and letterboxing irrelevant.
+2. Each frame becomes a 64-bit DCT perceptual hash.
+3. A locality-sensitive hash index picks which pairs are worth comparing properly, so a large
+   library doesn't turn into an all-pairs comparison.
+4. A sliding sequence aligner catches trimmed or offset copies.
+
+Notes:
+
+- **Presets.** Quick / Balanced / Thorough set sampling density and strictness; the advanced
+  panel shows the real values behind whichever preset is selected.
+- **Fingerprint cache** lives in `%LocalAppData%\TagCat\fingerprints.db`, so repeat scans
+  are fast. Changing sampling settings invalidates cached entries automatically (they are keyed
+  by a profile key), so you never compare fingerprints built under different settings.
+- **Deletion always goes through the Recycle Bin**, and only for files you tick. There is a guard
   against emptying an entire group.
-- **Exclude folders and files** from scanning, either for one session or permanently.
-- Files that couldn't be read are listed rather than silently skipped.
+- **Partial matches** (a trim vs. the full version) are flagged, because a clip is not
+  interchangeable with the video it came from.
+- **Images** are handled by treating a still as a one-frame video, so the same hashing that
+  ignores resolution, compression and cropping applies to photos. JPEG, PNG, BMP, GIF and TIFF
+  always work; HEIC and WebP work when the relevant Windows codec is installed.
+- **Audio works in Express only**, and the checkbox greys out in the other three modes rather
+  than being hidden, so the gap stays visible. Express never decodes anything - it compares raw
+  bytes - so file type is irrelevant to it. *Perceptual* audio matching, the equivalent of what
+  Quick/Balanced/Thorough do for video, is still not implemented: perceptual video hashing works
+  on the *picture* in a frame, and audio has no frames. Doing it properly means decoding to PCM,
+  building a spectrogram, and hashing spectral bands over time (the Haitsma-Kalker approach, or
+  something chromaprint-like). The rest of the machinery — the LSH candidate index, the sliding
+  sequence aligner, the fingerprint cache, the review UI — is format-agnostic and would be
+  reused as-is; it is the decode-and-fingerprint front end that would have to be written.
+- **Suggested keeper.** For content matches, the highest resolution then longest then largest
+  wins. For Express matches every one of those ties by definition, so the filename decides
+  instead: a clean name beats "- Copy", which beats "name_2", which beats "name (2)", with the
+  oldest file breaking any remaining tie.
+- **More Options** on each file in a group: open its folder, open the folder in TagCat with that
+  file selected, open every folder in the group at once, exclude the folder for this session or
+  permanently, exclude the file permanently, or copy its path.
+- **Exclusions.** Folders and files excluded from scanning are reviewed and edited in Settings,
+  in two separate lists. Each scan mode's advanced options has its own checkbox to include them
+  anyway, just for that scan.
+- **Could not read** files are listed under the results; clicking through shows every one with
+  its reason.
+- **Codec support is whatever Windows provides.** Files that can't be decoded are reported, not
+  silently skipped — press **What happened?** after any scan for the per-file detail, and
+  "See the full log." at the bottom of that window for the complete log. ffmpeg is used if it
+  happens to be on PATH, but nothing is bundled, so there is no licensing implication for
+  redistribution.
 
-### Caching
+## Scripts
 
-Thumbnails and video fingerprints are cached, so reopening a folder or rescanning is fast.
-Both caches can be relocated, cleared, or switched off entirely in Settings, and both are safe
-to delete at any time — they just rebuild.
+All of these live in this `TagCat` folder. There is also a `RUN.bat` at the zip's top level
+that simply calls the one in here, so you can start the app without opening the folder first.
 
----
+- `RUN.bat` — build and run. Checks for a .NET 9 SDK first and explains what to install if it's
+  missing, since that's the most likely failure after the v0.20 framework change.
+- `CLEAN-REBUILD.bat` — deletes `bin\` and `obj\` then builds and runs. Use this when you've
+  copied a new version over an old folder; stale build output is the usual reason a change
+  appears not to have applied.
+- `MAKE-EXE.bat` — publishes a self-contained single-file `TagCat.exe` into `StandaloneApp\`
+  that runs without the .NET runtime installed. Large (~480MB), because it bundles the whole
+  .NET runtime and all of LibVLC.
 
-## Notes and limitations
+### Building the installer
 
-- **Windows only.** It leans on Windows Shell APIs for thumbnails and Windows codecs for
-  decoding, so there's no Mac or Linux version.
-- **Codec support is whatever Windows provides.** JPEG, PNG, BMP, GIF and TIFF always work;
-  HEIC and WebP need the relevant Windows codec installed. Files that can't be decoded are
-  reported, not silently ignored.
-- **Perceptual audio matching isn't implemented.** Express finds identical audio files by
-  checksum, but there's no equivalent of the video matching that would find the same song at a
-  different bitrate. That needs a genuinely different approach (spectrogram-based hashing).
-- Tags are limited to what a filename can legally hold — no spaces within a single tag, and the
-  usual Windows path length limits apply.
+**`BUILD-RELEASE.bat` does the whole thing in one step** - publishes the app and compiles the
+installer, ending with a ready-to-upload `.exe` in `Output\`. It checks for both the .NET SDK
+and Inno Setup up front, so a missing tool is reported in seconds rather than after a long
+build. The two scripts below are the same steps run separately, if you'd rather do them by hand.
 
----
 
-## Licence
+For a small download instead of the ~480MB standalone exe:
 
-TagCat's own code is [MIT](LICENSE) — use it however you like.
+- `MAKE-INSTALLER-PACKAGE.bat` — publishes a framework-dependent build into `InstallerPackage\app`
+  with the .NET runtime and LibVLC deliberately stripped out, then reports the resulting size.
+- `TagCat.iss` — an [Inno Setup](https://jrsoftware.org/isinfo.php) script that packages that
+  folder into a normal `TagCat-Setup.exe`, with a Start Menu entry and an uninstaller. Open it
+  in Inno Setup 6.1+ and press Compile. Nothing else to install - it uses Inno Setup's own
+  built-in download support.
+- `Install.bat` / `Install.ps1` — a plainer alternative to the Inno installer, for the same
+  `InstallerPackage` folder. Same detect-and-fetch behaviour, no compiler needed, but no
+  Start Menu entry or uninstaller.
 
-It's built on LibVLC and LibVLCSharp, which are LGPL-2.1-or-later, and ships with a few
-MIT-licensed Microsoft components. See [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)
-for the full list.
+Either way, the resulting installer checks the target machine for the .NET 9 Desktop Runtime
+and for VLC, asks before downloading, and fetches only what's missing. An existing VLC install
+is detected and reused.
 
-ffmpeg is deliberately not bundled. The Duplicate Finder will use one already installed on
-your machine as a fallback decoder, but TagCat never ships or downloads it.
+**Run `MAKE-INSTALLER-PACKAGE.bat` before compiling `TagCat.iss`** — the script packages
+whatever is currently in `InstallerPackage\app`, so skipping that step ships stale files.

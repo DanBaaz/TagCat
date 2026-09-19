@@ -36,10 +36,10 @@
     <RootNamespace>MediaTagger</RootNamespace>
     <Platforms>x64</Platforms>
 
-    <Version>0.59</Version>
-    <AssemblyVersion>0.59.0.0</AssemblyVersion>
-    <FileVersion>0.59.0.0</FileVersion>
-    <InformationalVersion>0.59b</InformationalVersion>
+    <Version>0.61</Version>
+    <AssemblyVersion>0.61.0.0</AssemblyVersion>
+    <FileVersion>0.61.0.0</FileVersion>
+    <InformationalVersion>0.61</InformationalVersion>
 
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -55,6 +55,14 @@
     <!-- Fingerprint cache for the duplicate finder. Bumped 8.x -> 9.x to match the
          runtime; MIT licensed, which matters for commercial redistribution. -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+  </ItemGroup>
+
+
+  <!-- Copied next to the executable so Settings > Licence can open them. LGPL requires the
+       notices travel with the build, so these are part of the output, not just the repo. -->
+  <ItemGroup>
+    <Content Include="LICENSE" CopyToOutputDirectory="PreserveNewest" Condition="Exists('LICENSE')" />
+    <Content Include="THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" Condition="Exists('THIRD-PARTY-NOTICES.txt')" />
   </ItemGroup>
 
 </Project>

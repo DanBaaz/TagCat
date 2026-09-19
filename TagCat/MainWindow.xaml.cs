@@ -22,7 +22,7 @@ namespace MediaTagger
 {
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
-        private const string AppVersion = "0.59b";
+        private const string AppVersion = "0.61";
 
         private List<MediaItem> _allItems = new();
         private readonly ObservableCollection<MediaItem> _displayedItems = new();
@@ -151,7 +151,7 @@ namespace MediaTagger
                 return;
             }
 
-            var result = await UpdateChecker.CheckAsync(AppVersion);
+            var result = await UpdateChecker.CheckAsync(CombinedVersion);
 
             // A failed check at startup stays silent. Someone who did not ask about updates
             // this session should not get an error dialog about one; the Settings button
@@ -163,7 +163,7 @@ namespace MediaTagger
                     StringComparison.OrdinalIgnoreCase)) return;
 
             var choice = MessageBox.Show(this,
-                $"TagCat {result.LatestVersion} is available. You have v{AppVersion}.\n\n" +
+                $"TagCat {result.LatestVersion} is available. You have v{CombinedVersion}.\n\n" +
                 "Open the download page?\n\n" +
                 "Choosing No won't ask again for this version.",
                 "Update available", MessageBoxButton.YesNo, MessageBoxImage.Information);
@@ -2715,6 +2715,24 @@ namespace MediaTagger
         /// <summary>Exposed for the Settings window's About section.</summary>
         internal static string Version => AppVersion;
 
+        /// <summary>
+        /// The combined "0.&lt;TagCat&gt;.&lt;DF&gt;" form that release tags use - e.g. 0.59e.19.
+        /// The update check MUST compare against this, not AppVersion: a tag like
+        /// "v0.59e.19" has a third part that AppVersion ("0.59e") simply doesn't, and a
+        /// missing part counts as zero, so 19 > 0 made every release look like an update.
+        /// </summary>
+        internal static string CombinedVersion
+        {
+            get
+            {
+                // DedupeVersion carries its own leading "0." which would otherwise produce
+                // "0.59e.0.19" - four parts instead of three.
+                var dedupe = VideoDedupe.DuplicateFinderWindow.DedupeVersion;
+                var suffix = dedupe.StartsWith("0.", StringComparison.Ordinal) ? dedupe[2..] : dedupe;
+                return $"{AppVersion}.{suffix}";
+            }
+        }
+
         private double _thumbnailHeight = AppSettings.DefaultThumbnailHeight;
 
         /// <summary>
@@ -3351,8 +3369,81 @@ namespace MediaTagger
             }
         }
 
+        /// <summary>
+        /// Fills in the two repeat-last-folder items each time the menu opens. Done here
+        /// rather than once at startup because the menu lives in a DataTemplate - there is one
+        /// instance per tile, and no code-behind field for any of them.
+        /// </summary>
+        private void FileContextMenu_Opened(object sender, RoutedEventArgs e)
+        {
+            if (sender is not ContextMenu menu) return;
+
+            foreach (var entry in menu.Items)
+            {
+                if (entry is not MenuItem item || item.Tag is not string marker) continue;
+
+                if (marker == "undo")
+                {
+                    // Named rather than a bare "Undo", so it's clear what's about to be
+                    // reversed before clicking - undo that silently does the wrong thing to
+                    // files is worse than no undo.
+                    item.IsEnabled = Undo.CanUndo;
+                    item.Header = Undo.CanUndo ? $"Undo {Undo.NextDescription}" : "Undo";
+                    continue;
+                }
+
+                if (marker is not ("repeat-move" or "repeat-copy")) continue;
+
+                bool isMoveEntry = marker == "repeat-move";
+
+                // Only the entry matching the last action is shown - offering both would
+                // invite a copy where a move was meant, or the reverse.
+                if (string.IsNullOrEmpty(_lastMoveCopyFolder) || isMoveEntry != _lastMoveCopyWasMove)
+                {
+                    item.Visibility = Visibility.Collapsed;
+                    continue;
+                }
+
+                item.Header = $"{(isMoveEntry ? "Move" : "Copy")} to {_lastMoveCopyFolder}";
+                item.Visibility = Visibility.Visible;
+            }
+        }
+
+        /// <summary>Kept for the failure path, where the remembered folder has to be dropped
+        /// while no menu is open to refresh.</summary>
+        private void UpdateRepeatFolderMenuItems()
+        {
+            // Nothing to do eagerly - FileContextMenu_Opened reads _lastMoveCopyFolder each
+            // time the menu opens, so clearing the field is enough on its own.
+        }
+
+        private void UndoMenu_Click(object sender, RoutedEventArgs e) => UndoLast();
+
+        private void RepeatMove_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_lastMoveCopyFolder)) return;
+            MoveOrCopySelectedTo(FileOpMode.Move, _lastMoveCopyFolder);
+        }
+
+        private void RepeatCopy_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_lastMoveCopyFolder)) return;
+            MoveOrCopySelectedTo(FileOpMode.Copy, _lastMoveCopyFolder);
+        }
+
         private void MoveSelected_Click(object sender, RoutedEventArgs e) => MoveOrCopySelected(FileOpMode.Move);
         private void CopySelected_Click(object sender, RoutedEventArgs e) => MoveOrCopySelected(FileOpMode.Copy);
+
+        /// <summary>
+        /// The folder last moved or copied to, so it can be offered as a one-click repeat.
+        /// Session-only by design - it is cleared on exit rather than persisted, since a
+        /// destination from days ago is far more likely to be a mis-click than a shortcut.
+        /// </summary>
+        private string? _lastMoveCopyFolder;
+
+        /// <summary>True if the last operation was a move, false if a copy. Only one repeat
+        /// entry is offered, matching whichever was actually done.</summary>
+        private bool _lastMoveCopyWasMove;
 
         private void MoveOrCopySelected(FileOpMode mode)
         {
@@ -3368,6 +3459,27 @@ namespace MediaTagger
             };
             if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
 
+            MoveOrCopySelectedTo(mode, dialog.SelectedPath);
+        }
+
+        /// <summary>Shared by the "choose a folder" path and the repeat-last-folder menu items.</summary>
+        private void MoveOrCopySelectedTo(FileOpMode mode, string destination)
+        {
+            var items = GetSelectedItems();
+            if (items.Count == 0) return;
+
+            if (!Directory.Exists(destination))
+            {
+                MessageBox.Show(this,
+                    $"That folder no longer exists:\n\n{destination}",
+                    "TagCat", MessageBoxButton.OK, MessageBoxImage.Warning);
+
+                // Forgotten rather than left to fail again on the next attempt.
+                _lastMoveCopyFolder = null;
+                UpdateRepeatFolderMenuItems();
+                return;
+            }
+
             // Release the file lock first if a selected video is currently loaded in the preview.
             if (_selectedItem != null && (_selectedItem.Kind is MediaKind.Video or MediaKind.Audio) && items.Contains(_selectedItem))
             {
@@ -3377,9 +3489,24 @@ namespace MediaTagger
 
             try
             {
-                int count = LibraryService.CopyOrMove(items, dialog.SelectedPath, mode);
+                // Captured before the operation - afterwards the originals are gone (move) or
+                // the list no longer tells us which destination names were actually used.
+                var undoEntries = items
+                    .Select(i => new FileRename(i.FullPath, Path.Combine(destination, i.FileName)))
+                    .ToList();
+
+                int count = LibraryService.CopyOrMove(items, destination, mode);
                 string verb = mode == FileOpMode.Move ? "Moved" : "Copied";
                 MessageBox.Show($"{verb} {count} file(s).", "TagCat", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                // Only entries that actually landed where expected are recorded, so a
+                // collision-renamed file is never "undone" by moving the wrong file back.
+                var landed = undoEntries.Where(r => File.Exists(r.ToPath)).ToList();
+                Undo.Record($"{verb} {count} file(s) to {destination}", landed,
+                    mode == FileOpMode.Move ? UndoKind.Move : UndoKind.Copy);
+
+                _lastMoveCopyFolder = destination;
+                _lastMoveCopyWasMove = mode == FileOpMode.Move;
             }
             catch (Exception ex)
             {
@@ -3411,6 +3538,7 @@ namespace MediaTagger
 
             int deleted = 0;
             var errors = new List<string>();
+            var deletedEntries = new List<FileRename>();
             foreach (var item in items)
             {
                 try
@@ -3420,12 +3548,18 @@ namespace MediaTagger
                         Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
                         Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
                     deleted++;
+                    deletedEntries.Add(new FileRename(item.FullPath, item.FullPath));
                 }
                 catch (Exception ex)
                 {
                     errors.Add($"{item.FileName}: {ex.Message}");
                 }
             }
+
+            // Recorded so Ctrl+Z acknowledges the delete and says where the files went,
+            // rather than silently skipping past it and undoing an earlier action instead -
+            // which would be far more surprising than being told to use the Recycle Bin.
+            Undo.Record($"Deleted {deleted} file(s)", deletedEntries, UndoKind.Delete);
 
             if (errors.Count > 0)
                 MessageBox.Show(
@@ -3587,6 +3721,44 @@ namespace MediaTagger
         /// </summary>
         private const string TagCatChangelogText = """
 TagCat — Changelog
+
+v0.61
+ - Ctrl+Z now covers moves and copies as well as tag changes. Undoing a move puts the files
+   back; undoing a copy removes the copies it made, sending them to the Recycle Bin rather
+   than deleting outright.
+ - Deletes are recorded too, but can't be reversed from here - Windows has no reliable way
+   to restore a specific file from the Recycle Bin. Ctrl+Z now says so and points you there,
+   instead of silently skipping the delete and undoing something older.
+ - Added Undo to the right-click menu, naming what it will reverse so you can see before
+   clicking.
+ - Only one repeat entry now appears after a move or copy, matching whichever was actually
+   done, rather than offering both.
+
+v0.60
+ - Fixed the update check offering the version you already have. It compared the TagCat
+   version alone against a release tag containing both version numbers, so the Duplicate
+   Finder part always made the release look newer. It now compares the same combined form.
+ - Settings > About reorganised: the heading shows the full version, and Updates, Changelogs
+   and Licence are now their own sections. The Duplicate Finder entry no longer repeats the
+   TagCat version.
+ - New Licence section with buttons to read the licence and third-party notices, which now
+   ship alongside the program.
+ - Right-click menu: after a move or copy, a "Move to <folder>" / "Copy to <folder>" entry
+   appears naming that folder, for repeating it without picking again. Cleared when TagCat
+   closes.
+
+v0.59e
+ - .gitignore now also excludes the installer-building scripts, so the only TagCat installer
+   in circulation is the official one from the Releases page. The source itself is unaffected.
+
+v0.59d
+ - Added BUILD-RELEASE.bat, which publishes the app and compiles the installer in one step,
+   ending with a ready-to-upload .exe. Checks for the .NET SDK and Inno Setup before starting
+   so a missing tool is reported immediately rather than after a long build.
+
+v0.59c
+ - Fixed a build error introduced in v0.59: the settings window used UpdateChecker without
+   importing the namespace it lives in, so the project would not compile.
 
 v0.59b
  - Fixed the update check never finding a release. It only recognised tags like "v0.58.19",

@@ -285,18 +285,19 @@
                     </StackPanel>
                 </Expander>
 
-                <TextBlock Text="About" Style="{StaticResource SectionHeading}"/>
+                <TextBlock Name="AboutHeadingText" Text="About" Style="{StaticResource SectionHeading}"/>
                 <Border Style="{StaticResource Card}" Padding="14" Margin="0,0,0,14">
                     <StackPanel>
-                        <TextBlock Name="VersionText" FontWeight="SemiBold"/>
-                        <TextBlock Style="{StaticResource Faint}" TextWrapping="Wrap" Margin="0,4,0,8"
+                        <TextBlock Style="{StaticResource Faint}" TextWrapping="Wrap"
                                    Text="Tags are stored in the filename itself, so they travel with the file and need no database."/>
-                        <StackPanel Orientation="Horizontal">
-                            <Button Content="View changelog" Click="Changelog_Click"/>
-                            <Button Name="CheckUpdatesButton" Content="Check for updates"
-                                    Margin="8,0,0,0" Click="CheckUpdates_Click"/>
-                        </StackPanel>
+                    </StackPanel>
+                </Border>
 
+                <TextBlock Text="Updates" Style="{StaticResource SectionHeading}"/>
+                <Border Style="{StaticResource Card}" Padding="14" Margin="0,0,0,14">
+                    <StackPanel>
+                        <Button Name="CheckUpdatesButton" Content="Check for updates"
+                                HorizontalAlignment="Left" Click="CheckUpdates_Click"/>
                         <TextBlock Name="UpdateStatusText" Style="{StaticResource Muted}"
                                    TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed"/>
                         <CheckBox Name="CheckUpdatesOnStartupBox" Content="Check for updates at startup"
@@ -306,13 +307,29 @@
                     </StackPanel>
                 </Border>
 
+                <TextBlock Text="Changelogs" Style="{StaticResource SectionHeading}"/>
+                <Border Style="{StaticResource Card}" Padding="14" Margin="0,0,0,14">
+                    <StackPanel>
+                        <TextBlock Name="VersionText" FontWeight="SemiBold"/>
+                        <Button Content="View changelog" HorizontalAlignment="Left"
+                                Margin="0,6,0,0" Click="Changelog_Click"/>
+
+                        <TextBlock Name="DedupeVersionText" FontWeight="SemiBold" Margin="0,16,0,0"/>
+                        <TextBlock Style="{StaticResource Faint}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                   Text="Started as a separate standalone app before being merged in - hence two version numbers."/>
+                        <Button Content="View changelog" HorizontalAlignment="Left"
+                                Margin="0,6,0,0" Click="DedupeChangelog_Click"/>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="Licence" Style="{StaticResource SectionHeading}"/>
                 <Border Style="{StaticResource Card}" Padding="14">
                     <StackPanel>
-                        <TextBlock Name="DedupeVersionText" FontWeight="SemiBold"/>
-                        <TextBlock Style="{StaticResource Faint}" TextWrapping="Wrap" Margin="0,4,0,8"
-                                   Text="Started as a separate standalone app before being merged in - hence two version numbers."/>
+                        <TextBlock TextWrapping="Wrap" Style="{StaticResource Faint}" Margin="0,0,0,8"
+                                   Text="TagCat's own code is MIT licensed - free to use, change and share. It's built on LibVLC and LibVLCSharp, which are LGPL-2.1-or-later, plus some MIT-licensed Microsoft components."/>
                         <StackPanel Orientation="Horizontal">
-                            <Button Content="View changelog" Click="DedupeChangelog_Click"/>
+                            <Button Content="View licence" Click="ViewLicence_Click"/>
+                            <Button Content="Third-party notices" Margin="8,0,0,0" Click="ViewThirdParty_Click"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>

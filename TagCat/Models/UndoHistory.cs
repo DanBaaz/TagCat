@@ -9,6 +9,19 @@ namespace MediaTagger.Models
     public record FileRename(string FromPath, string ToPath);
 
     /// <summary>
+    /// What kind of action an undo entry reverses. Each needs genuinely different handling:
+    /// a rename or move goes back where it came from, a copy has its copy removed, and a
+    /// delete has to be pulled out of the Recycle Bin.
+    /// </summary>
+    public enum UndoKind
+    {
+        Rename,
+        Move,
+        Copy,
+        Delete
+    }
+
+    /// <summary>
     /// A whole user action ("Added tag beach to 43 files"), undone as a unit. Grouping
     /// matters: a bulk tag is one decision the user made, so it should take one undo to
     /// reverse, not forty-three.
@@ -18,22 +31,23 @@ namespace MediaTagger.Models
         public string Description { get; }
         public DateTime PerformedAt { get; } = DateTime.Now;
         public IReadOnlyList<FileRename> Renames { get; }
+        public UndoKind Kind { get; }
 
-        public UndoOperation(string description, IReadOnlyList<FileRename> renames)
+        public UndoOperation(string description, IReadOnlyList<FileRename> renames,
+            UndoKind kind = UndoKind.Rename)
         {
             Description = description;
             Renames = renames;
+            Kind = kind;
         }
     }
 
     /// <summary>
     /// Undo history for tag changes, which are really file renames.
     ///
-    /// Deliberately session-only and rename-only. It is not persisted, because a stored
-    /// history would go stale the moment files were touched outside the app and undoing
-    /// against stale state is worse than having no undo. It does not cover delete, move or
-    /// copy: those leave the original location, and pretending to reverse them would be a
-    /// promise this cannot keep.
+    /// Covers tag changes, moves, copies and deletes. Deliberately session-only: a stored
+    /// history would go stale the moment files were touched outside the app, and undoing
+    /// against stale state is worse than having no undo at all.
     /// </summary>
     public class UndoHistory
     {
@@ -47,11 +61,12 @@ namespace MediaTagger.Models
         public string? NextDescription =>
             _operations.Count > 0 ? _operations[^1].Description : null;
 
-        public void Record(string description, IReadOnlyList<FileRename> renames)
+        public void Record(string description, IReadOnlyList<FileRename> renames,
+            UndoKind kind = UndoKind.Rename)
         {
             if (renames.Count == 0) return;
 
-            _operations.Add(new UndoOperation(description, renames));
+            _operations.Add(new UndoOperation(description, renames, kind));
             while (_operations.Count > MaxOperations) _operations.RemoveAt(0);
         }
 
@@ -80,17 +95,49 @@ namespace MediaTagger.Models
             {
                 try
                 {
-                    if (!File.Exists(rename.ToPath)) { missing++; continue; }
-
-                    if (File.Exists(rename.FromPath) &&
-                        !string.Equals(rename.FromPath, rename.ToPath, StringComparison.OrdinalIgnoreCase))
+                    switch (operation.Kind)
                     {
-                        blocked++;
-                        continue;
-                    }
+                        case UndoKind.Copy:
+                            // Undoing a copy means removing the copy it created. The original
+                            // was never touched, so only ToPath is involved. Recycled rather
+                            // than hard-deleted: undo should not destroy anything outright,
+                            // in case the copy has been edited since.
+                            if (!File.Exists(rename.ToPath)) { missing++; break; }
 
-                    File.Move(rename.ToPath, rename.FromPath);
-                    restored++;
+                            Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(
+                                rename.ToPath,
+                                Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
+                                Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+                            restored++;
+                            break;
+
+                        case UndoKind.Delete:
+                            // The file is in the Recycle Bin, which has no supported API for
+                            // restoring a specific file by path - the shell verb for it is
+                            // locale-dependent and unreliable. Counted as blocked, and the
+                            // caller explains where the files actually are.
+                            blocked++;
+                            break;
+
+                        default:
+                            if (!File.Exists(rename.ToPath)) { missing++; break; }
+
+                            if (File.Exists(rename.FromPath) &&
+                                !string.Equals(rename.FromPath, rename.ToPath, StringComparison.OrdinalIgnoreCase))
+                            {
+                                blocked++;
+                                break;
+                            }
+
+                            // Recreates the original folder if it was emptied and cleaned up
+                            // after a move - otherwise moving back fails on a missing parent.
+                            var parent = Path.GetDirectoryName(rename.FromPath);
+                            if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+
+                            File.Move(rename.ToPath, rename.FromPath);
+                            restored++;
+                            break;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -99,9 +146,19 @@ namespace MediaTagger.Models
                 }
             }
 
-            var summary = $"Undid \"{operation.Description}\" — {restored} file(s) restored";
+            if (operation.Kind == UndoKind.Delete)
+            {
+                return new UndoOutcome(
+                    $"\"{operation.Description}\" can't be undone from here - the files are in the " +
+                    "Recycle Bin. Open it, select them and choose Restore.",
+                    0, 0, blocked)
+                { Failures = failures };
+            }
+
+            var verb = operation.Kind == UndoKind.Copy ? "copies removed" : "file(s) restored";
+            var summary = $"Undid \"{operation.Description}\" — {restored} {verb}";
             if (missing > 0) summary += $", {missing} no longer found";
-            if (blocked > 0) summary += $", {blocked} could not be restored";
+            if (blocked > 0) summary += $", {blocked} could not be undone";
 
             return new UndoOutcome(summary + ".", restored, missing, blocked) { Failures = failures };
         }

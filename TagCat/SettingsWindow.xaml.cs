@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using MediaTagger.Models;
+using MediaTagger.Services;
 
 namespace MediaTagger
 {
@@ -81,9 +82,12 @@ namespace MediaTagger
             // Null (never asked) shows as unticked; the startup prompt is what sets it either way.
             CheckUpdatesOnStartupBox.IsChecked = settings.CheckForUpdatesOnStartup == true;
 
+            AboutHeadingText.Text = $"About TagCat v{MainWindow.CombinedVersion}";
             VersionText.Text = $"TagCat v{MainWindow.Version}";
-            DedupeVersionText.Text =
-                $"Duplicate Finder Versions: v{VideoDedupe.DuplicateFinderWindow.DedupeVersion}  (TagCat v{MainWindow.Version})";
+
+            // No TagCat version here - the heading above already carries it, and repeating it
+            // inside the Duplicate Finder's own entry read as though DF depended on it.
+            DedupeVersionText.Text = $"Duplicate Finder v{VideoDedupe.DuplicateFinderWindow.DedupeVersion}";
 
             // Whichever app the gear was clicked in gets the benefit of the doubt about
             // what the person came here to change.
@@ -494,6 +498,43 @@ namespace MediaTagger
 
         private void Changelog_Click(object sender, RoutedEventArgs e) => _owner.ShowTagCatChangelog(this);
 
+        // ---------- Licence ----------
+
+        private void ViewLicence_Click(object sender, RoutedEventArgs e) => ShowTextFile("LICENSE", "Licence");
+
+        private void ViewThirdParty_Click(object sender, RoutedEventArgs e) =>
+            ShowTextFile("THIRD-PARTY-NOTICES.txt", "Third-party notices");
+
+        /// <summary>
+        /// Opens a text file shipped alongside the executable. Falls back to a message rather
+        /// than an error if it isn't there - a missing licence file shouldn't look like a
+        /// crash, and the same text is on the GitHub page anyway.
+        /// </summary>
+        private void ShowTextFile(string fileName, string title)
+        {
+            try
+            {
+                var path = Path.Combine(AppContext.BaseDirectory, fileName);
+                if (!File.Exists(path))
+                {
+                    MessageBox.Show(this,
+                        $"{fileName} isn't in the application folder. You can read it at " +
+                        "https://github.com/DanBaaz/TagCat",
+                        title, MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path)
+                {
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
         // ---------- Updates ----------
 
         private void UpdateOption_Changed(object sender, RoutedEventArgs e)
@@ -510,7 +551,7 @@ namespace MediaTagger
 
             try
             {
-                var result = await UpdateChecker.CheckAsync(MainWindow.Version);
+                var result = await UpdateChecker.CheckAsync(MainWindow.CombinedVersion);
 
                 if (result.ErrorMessage != null)
                 {
@@ -520,14 +561,14 @@ namespace MediaTagger
 
                 if (!result.UpdateAvailable)
                 {
-                    UpdateStatusText.Text = $"You're on the latest version (v{MainWindow.Version}).";
+                    UpdateStatusText.Text = $"You're on the latest version (v{MainWindow.CombinedVersion}).";
                     return;
                 }
 
                 UpdateStatusText.Text = $"Version {result.LatestVersion} is available.";
 
                 var answer = MessageBox.Show(this,
-                    $"TagCat {result.LatestVersion} is available. You have v{MainWindow.Version}.\n\n" +
+                    $"TagCat {result.LatestVersion} is available. You have v{MainWindow.CombinedVersion}.\n\n" +
                     "Open the download page?",
                     "Update available", MessageBoxButton.YesNo, MessageBoxImage.Information);
 

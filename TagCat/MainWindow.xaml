@@ -632,7 +632,12 @@
                                         </Style>
                                     </Border.Style>
                                     <Border.ContextMenu>
-                                        <ContextMenu>
+                                        <!-- Opening is handled in code because this menu lives in a
+                                             DataTemplate: x:Name generates no field for a templated
+                                             element, so the repeat items are found by their Tag instead. -->
+                                        <ContextMenu Opened="FileContextMenu_Opened">
+                                            <MenuItem Tag="undo" Header="Undo" Click="UndoMenu_Click"/>
+                                            <Separator/>
                                             <MenuItem Header="Open with System Default" Click="OpenSelected_Click"/>
                                             <MenuItem Header="Open in Pop-Up Window" Click="OpenInViewer_Click"/>
                                             <MenuItem Header="Open containing folder" Click="OpenContainingFolder_Click"/>
@@ -641,6 +646,8 @@
                                             <Separator/>
                                             <MenuItem Header="Move to folder..." Click="MoveSelected_Click"/>
                                             <MenuItem Header="Copy to folder..." Click="CopySelected_Click"/>
+                                            <MenuItem Tag="repeat-move" Visibility="Collapsed" Click="RepeatMove_Click"/>
+                                            <MenuItem Tag="repeat-copy" Visibility="Collapsed" Click="RepeatCopy_Click"/>
                                             <Separator/>
                                             <MenuItem Header="Properties..." Click="FileProperties_Click"/>
                                             <Separator/>
@@ -802,7 +809,7 @@
         <Grid Grid.Row="2" Margin="10,4">
             <!-- Changelog moved to Settings > About; the footer just states the version. -->
             <TextBlock HorizontalAlignment="Right" Foreground="Gray" FontSize="11">
-                <Run Text="v0.59b"/>
+                <Run Text="v0.61"/>
             </TextBlock>
         </Grid>
     </Grid>
