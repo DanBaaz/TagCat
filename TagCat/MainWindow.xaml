@@ -1,0 +1,809 @@
+<Window x:Class="MediaTagger.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
+        xmlns:ctl="clr-namespace:MediaTagger.Controls"
+        Title="TagCat" Height="800" Width="1300" WindowStartupLocation="CenterScreen"
+        Background="{StaticResource WindowBackgroundBrush}"
+        FontSize="12.5"
+        Closed="Window_Closed" PreviewKeyDown="Window_PreviewKeyDown">
+    <!-- TagCheck and the rest of the styles now live in App.xaml, shared with the
+         Duplicate Finder window so both read as one application. -->
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Top toolbar -->
+        <Grid Grid.Row="0" Margin="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Name="RefreshButton" Style="{StaticResource PrimaryButton}" Padding="12,5"
+                    ToolTip="Refresh (reload selected folder(s) from disk)" Click="RefreshButton_Click" IsEnabled="False">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="⟳" FontSize="15" VerticalAlignment="Center"/>
+                    <TextBlock Text="Refresh" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="1" Name="SelectFolderButton" Style="{StaticResource CompactButton}"
+                    Content="Select Folder(s) &#x25BE;" Padding="10,5" Margin="6,0,0,0"
+                    Click="SelectFolderButton_Click"/>
+
+            <!-- Placement/width are set against FolderPathBox so the panel lines up with the
+                 path field and spans the same width, rather than hanging off the button. -->
+            <!-- Anchored to the button, not the path box, so the panel's left edge lines up
+                 with the button's. Width still tracks the path box so it spans the toolbar. -->
+            <Popup Name="SelectFolderPopup" PlacementTarget="{Binding ElementName=SelectFolderButton}"
+                   Placement="Bottom" StaysOpen="False"
+                   Width="{Binding ActualWidth, ElementName=FolderPathBox}">
+                <!-- IsSharedSizeScope + a shared SharedSizeGroup is how the two command
+                     buttons end up the same width: each sits in a one-column grid, and WPF
+                     sizes that column to the widest content across both. Binding one button's
+                     Width to the other's ActualWidth would read zero before layout has run. -->
+                <Border Background="White" BorderBrush="#CCC" BorderThickness="1" Padding="12"
+                        Grid.IsSharedSizeScope="True">
+                    <StackPanel>
+                        <Grid HorizontalAlignment="Left">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="FolderMenuButton"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Style="{StaticResource CompactButton}" Content="Browse Folder(s)..."
+                                    HorizontalAlignment="Stretch" Click="BrowseButton_Click"/>
+                        </Grid>
+
+                        <TextBlock Text="Bookmarked Folders" FontWeight="Bold" Margin="0,14,0,2"/>
+                        <TextBlock Text="Ctrl+click to pick several at once." Foreground="Gray"
+                                   FontSize="10" Margin="0,0,0,6"/>
+
+                        <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl Name="BookmarkList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <!-- The highlight lives on this Border so it spans the
+                                             full row width, including under the bin button.
+                                             Selection colours it first; hovering the bin then
+                                             overrides with a warning tint, so it is obvious
+                                             which row is about to be removed. Trigger order
+                                             matters - the later one wins. -->
+                                        <Border Margin="0,1" CornerRadius="3">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="Transparent"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsMouseOver, ElementName=BookmarkBinButton}" Value="True">
+                                                            <Setter Property="Background" Value="#FFE0E0"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Button Grid.Column="0" Style="{StaticResource LinkButton}"
+                                                        Content="{Binding Path}" Tag="{Binding}" ToolTip="{Binding Path}"
+                                                        HorizontalAlignment="Left" HorizontalContentAlignment="Left"
+                                                        Padding="4,4" Click="BookmarkItem_Click"/>
+                                                <Button Grid.Column="1" Name="BookmarkBinButton"
+                                                        Style="{StaticResource IconButton}"
+                                                        Content="&#x1F5D1;" FontSize="13" Width="26" Height="24"
+                                                        Tag="{Binding}" ToolTip="Remove this bookmark"
+                                                        Click="RemoveBookmark_Click"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <TextBlock Name="NoBookmarksText" Text="No bookmarks yet." Foreground="Gray"
+                                   FontSize="11" Margin="4,2,0,0" Visibility="Collapsed"/>
+
+                        <!-- Sits where the next bookmark will appear, so the list reads as
+                             growing downward from here. -->
+                        <Grid HorizontalAlignment="Left" Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="FolderMenuButton"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Name="AddBookmarkButton" Style="{StaticResource CompactButton}"
+                                    Content="+ Add Folder Bookmark" HorizontalAlignment="Stretch"
+                                    Click="AddBookmark_Click"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </Popup>
+
+            <!-- Editable: type or paste a path and press Enter to load it. Escape restores
+                 whatever was showing before. -->
+            <TextBox Grid.Column="2" Name="FolderPathBox" Margin="8,0" VerticalContentAlignment="Center"
+                     ToolTip="Type or paste a folder path and press Enter"
+                     KeyDown="FolderPathBox_KeyDown"/>
+            <Button Grid.Column="3" Name="FolderOptionsButton" Style="{StaticResource CompactButton}" Content="Folder Options &#x25BE;"
+                    VerticalAlignment="Center" Margin="6,0" Click="FolderOptionsButton_Click"/>
+            <Popup Name="FolderOptionsPopup" PlacementTarget="{Binding ElementName=FolderOptionsButton}"
+                   Placement="Bottom" StaysOpen="False">
+                <Border Background="White" BorderBrush="#CCC" BorderThickness="1" Padding="14" MinWidth="300">
+                    <StackPanel>
+                        <CheckBox Name="ShowFoldersInPaneBox" Content="Show Folders in Thumbnail Pane"
+                                  Margin="0,0,0,10"
+                                  Checked="ShowFoldersInPane_Changed" Unchecked="ShowFoldersInPane_Changed"/>
+
+                        <!-- Greyed rather than hidden while folder browsing is on: the options
+                             stay visible so it's clear they exist and why they don't currently
+                             apply, instead of the panel silently changing shape. -->
+                        <Border BorderBrush="#DDD" BorderThickness="0,1,0,0" Margin="0,0,0,10" Padding="0,10,0,0">
+                            <StackPanel>
+                                <CheckBox Name="IncludeSubfoldersBox" Content="Display Sub-folder Contents"
+                                          Checked="IncludeSubfolders_Changed" Unchecked="IncludeSubfolders_Changed"/>
+
+                                <StackPanel Name="ExcludeSubfoldersPanel" Margin="20,8,0,0" IsEnabled="False">
+                                    <TextBlock Text="Exclude specific subfolders:" FontSize="11" Margin="0,0,0,4"/>
+                                    <ScrollViewer MaxHeight="100" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl Name="ExcludedSubfoldersList">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,1">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="{Binding}" FontSize="10"
+                                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                                                   ToolTip="{Binding}"/>
+                                                        <Button Grid.Column="1" Style="{StaticResource IconButton}"
+                                                                Content="&#x2715;" Width="16" Height="16" FontSize="8"
+                                                                Click="RemoveSubfolderExclusion_Click" Tag="{Binding}"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                    <TextBlock Name="NoExclusionsText" Text="None excluded." Foreground="Gray" FontSize="10" Margin="0,2,0,6"/>
+                                    <Button Style="{StaticResource CompactButton}" Content="Add exclusion..." Click="AddSubfolderExclusion_Click"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </Popup>
+            <TextBlock Grid.Column="4" Text="Sort by:" VerticalAlignment="Center" Margin="12,0,4,0"/>
+            <ComboBox Grid.Column="5" Name="SortFieldCombo" Width="140" SelectionChanged="SortOption_Changed">
+                <ComboBoxItem Content="File name" IsSelected="True"/>
+                <ComboBoxItem Content="Date modified"/>
+                <ComboBoxItem Content="Date created"/>
+                <ComboBoxItem Content="Size"/>
+                <ComboBoxItem Content="Random"/>
+            </ComboBox>
+            <ComboBox Grid.Column="6" Name="SortDirCombo" Width="110" Margin="6,0" SelectionChanged="SortOption_Changed">
+                <ComboBoxItem Content="Ascending" IsSelected="True"/>
+                <ComboBoxItem Content="Descending"/>
+            </ComboBox>
+            <TextBlock Grid.Column="7" Name="StatusText" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="Gray"/>
+            <Button Grid.Column="8" Name="SettingsButton" Style="{StaticResource IconButton}"
+                    Content="&#x2699;" Width="30" Height="26" FontSize="15" Margin="12,0,0,0"
+                    ToolTip="Settings" Click="Settings_Click"/>
+        </Grid>
+
+        <!-- Main content: resizable columns -->
+        <Grid Grid.Row="1" Name="MainContentGrid" SizeChanged="MainContentGrid_SizeChanged">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Name="FilterColumn" Width="290" MinWidth="200" MaxWidth="500"/>
+                <ColumnDefinition Width="5"/>
+                <!-- MinWidth is bound rather than fixed, so it keeps pace with the tile size
+                     chosen in Settings - always room for one column plus the scrollbar, no
+                     matter how large the thumbnails get. This is what stops the right splitter
+                     from squeezing the file grid away to nothing behind the preview pane.
+                     The MinWidth alone is not sufficient though: a star column honours its
+                     MinWidth even when that makes the columns total more than the grid, which
+                     is what pushed the preview pane off the right-hand edge. ClampPreviewColumn
+                     in the code-behind caps the preview's pixel width to what actually fits. -->
+                <ColumnDefinition Width="*" MinWidth="{Binding MinThumbnailPaneWidth, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                <ColumnDefinition Width="5"/>
+                <ColumnDefinition Name="PreviewColumn" Width="320" MinWidth="240"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left panel: filters. Everything flows top-to-bottom in one scroll region, so
+                 "Filter by type" sits right under "Filter by tags" and the whole panel reflows
+                 (shifting later sections up/down) as either section's expanders open or close. -->
+            <Border Grid.Column="0" BorderBrush="#DDD" BorderThickness="0,0,1,0" Padding="8">
+                <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                    <TextBlock Text="Search" FontWeight="Bold" Margin="0,0,0,4"/>
+                    <Grid>
+                        <TextBox Name="SearchBox" Padding="6,5,22,5" TextChanged="SearchBox_TextChanged"
+                                 ToolTip="Matches anywhere in the filename, including tags. Ctrl+F to focus."/>
+                        <Button Name="ClearSearchButton" Style="{StaticResource IconButton}" Content="&#x2715;"
+                                Width="18" Height="18" FontSize="9" HorizontalAlignment="Right" Margin="0,0,3,0"
+                                Visibility="Collapsed" ToolTip="Clear search" Click="ClearSearch_Click"/>
+                    </Grid>
+                    <TextBlock Name="SearchHintText" Style="{StaticResource Faint}" Margin="0,3,0,0"
+                               Text="Searches the whole filename, tags included."/>
+                </StackPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <Expander IsExpanded="True">
+                            <Expander.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Filter by tags" VerticalAlignment="Center" FontWeight="Bold"/>
+                                    <TextBlock Name="TagFilterTotalText" Text="(0 of 0)" Foreground="Gray" FontSize="11" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Expander.Header>
+                            <StackPanel Margin="0,4,0,0">
+                                <Button Style="{StaticResource CompactButton}" Content="Clear All Tag Filters." Margin="0,8,0,8" Click="ClearFilters_Click"/>
+
+                                <ItemsControl Name="TagFilterList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Style="{StaticResource TagCheck}"
+                                                      Content="{Binding Label}"
+                                                      IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                                      IsEnabled="{Binding IsAvailable}"
+                                                      Checked="TagCheckBox_Changed"
+                                                      Unchecked="TagCheckBox_Changed"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                            </StackPanel>
+                        </Expander>
+
+                        <!-- Kept out of "Filter by tags" so that section stays exactly as
+                             simple as it was. Everything here is off until deliberately used. -->
+                        <Expander Margin="0,12,0,0">
+                            <Expander.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Advanced Filtering" VerticalAlignment="Center" FontWeight="Bold"/>
+                                    <TextBlock Name="AdvancedFilterSummaryText" Foreground="Gray" FontSize="11"
+                                               Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Expander.Header>
+                            <StackPanel Margin="4,8,0,4">
+
+                                <TextBlock Text="Match tags above:" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,4"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <RadioButton Name="MatchAllTagsRadio" GroupName="TagMatchMode" Content="All"
+                                                 IsChecked="True" FontSize="11" VerticalAlignment="Center"
+                                                 Checked="TagMatchMode_Changed"/>
+                                    <RadioButton Name="MatchAnyTagsRadio" GroupName="TagMatchMode" Content="Any"
+                                                 FontSize="11" VerticalAlignment="Center" Margin="12,0,0,0"
+                                                 Checked="TagMatchMode_Changed"/>
+                                </StackPanel>
+                                <TextBlock Text="All: a file needs every ticked tag. Any: one is enough."
+                                           TextWrapping="Wrap" Foreground="Gray" FontSize="10" Margin="0,0,0,10"/>
+
+                                <Expander Margin="0,0,0,10">
+                                    <Expander.Header>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Exclude tags" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock Name="ExcludeTagsHeaderCountText" Foreground="Gray" FontSize="10"
+                                                       Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Expander.Header>
+                                    <StackPanel Margin="4,6,0,0">
+                                        <TextBlock Text="Hides files carrying any ticked tag, whatever the filter above matched."
+                                                   TextWrapping="Wrap" Foreground="Gray" FontSize="10" Margin="0,0,0,6"/>
+                                        <ItemsControl Name="ExcludeTagList">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <CheckBox Style="{StaticResource TagCheck}"
+                                                              Content="{Binding Label}"
+                                                              IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                                              IsEnabled="{Binding IsAvailable}"
+                                                              Checked="ExcludeTagCheckBox_Changed"
+                                                              Unchecked="ExcludeTagCheckBox_Changed"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <TextBlock Name="NoExcludableTagsText" Text="No tags in this folder yet."
+                                                   Foreground="Gray" FontSize="10" Visibility="Collapsed"/>
+                                    </StackPanel>
+                                </Expander>
+
+                                <Border BorderBrush="#DDD" BorderThickness="0,1,0,0" Padding="0,10,0,0">
+                                    <StackPanel>
+                                        <Button Name="BooleanTagButton" Style="{StaticResource CompactButton}" Content="Boolean Tags..."
+                                                HorizontalAlignment="Left" Margin="0,0,0,6" Click="BooleanTagButton_Click"/>
+                                        <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="10"
+                                                   Text="Write AND / OR / NOT logic the checklist above can't express, e.g. beach AND (sunset OR sunrise). Applies in addition to everything else here."/>
+
+                                        <Popup Name="BooleanTagPopup" PlacementTarget="{Binding ElementName=BooleanTagButton}"
+                                               Placement="Bottom" StaysOpen="False" Width="340">
+                                            <Border Background="White" BorderBrush="#CCC" BorderThickness="1" Padding="14">
+                                                <StackPanel>
+                                                    <Grid Margin="0,0,0,8">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="Boolean Tag Filter" FontWeight="Bold"/>
+                                                        <TextBlock Grid.Column="1" VerticalAlignment="Center">
+                                                            <Hyperlink Click="BooleanHelpLink_Click">Help</Hyperlink>
+                                                        </TextBlock>
+                                                    </Grid>
+                                                    <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+                                                               Text="AND, OR, NOT and parentheses, with tag names."/>
+
+                                                    <Border Name="BooleanHelpPanel" Visibility="Collapsed" Background="{StaticResource SurfaceBrush}"
+                                                            BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1"
+                                                            CornerRadius="6" Padding="8" Margin="0,0,0,8">
+                                                        <StackPanel>
+                                                            <TextBlock Text="beach AND sunset" FontFamily="Consolas" FontSize="10" FontWeight="SemiBold"/>
+                                                            <TextBlock Text="Files tagged both beach and sunset." Foreground="Gray"
+                                                                       FontSize="10" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                                            <TextBlock Text="beach OR mountains" FontFamily="Consolas" FontSize="10" FontWeight="SemiBold"/>
+                                                            <TextBlock Text="Files tagged beach, mountains, or both." Foreground="Gray"
+                                                                       FontSize="10" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                                            <TextBlock Text="beach AND NOT blurry" FontFamily="Consolas" FontSize="10" FontWeight="SemiBold"/>
+                                                            <TextBlock Text="Files tagged beach, but not blurry." Foreground="Gray"
+                                                                       FontSize="10" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                                            <TextBlock Text="(beach OR mountains) AND NOT blurry" FontFamily="Consolas"
+                                                                       FontSize="10" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                                            <TextBlock Text="Files tagged beach or mountains, excluding any also tagged blurry."
+                                                                       Foreground="Gray" FontSize="10" TextWrapping="Wrap"/>
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                                        <Button Content="AND" Style="{StaticResource CompactButton}" FontSize="10"
+                                                                Padding="6,2" Margin="0,0,4,0" Click="BooleanTagChip_Click" Tag="AND "/>
+                                                        <Button Content="OR" Style="{StaticResource CompactButton}" FontSize="10"
+                                                                Padding="6,2" Margin="0,0,4,0" Click="BooleanTagChip_Click" Tag="OR "/>
+                                                        <Button Content="NOT" Style="{StaticResource CompactButton}" FontSize="10"
+                                                                Padding="6,2" Margin="0,0,4,0" Click="BooleanTagChip_Click" Tag="NOT "/>
+                                                        <Button Content="(" Style="{StaticResource CompactButton}" FontSize="10"
+                                                                Padding="6,2" Margin="0,0,4,0" Click="BooleanTagChip_Click" Tag="("/>
+                                                        <Button Content=")" Style="{StaticResource CompactButton}" FontSize="10"
+                                                                Padding="6,2" Click="BooleanTagChip_Click" Tag=")"/>
+                                                    </StackPanel>
+
+                                                    <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderStrongBrush}"
+                                                            BorderThickness="1" CornerRadius="6">
+                                                        <TextBox Name="BooleanExpressionBox" AcceptsReturn="True" TextWrapping="Wrap"
+                                                                 MinLines="2" MaxLines="4" Padding="8,6" BorderThickness="0"
+                                                                 Background="Transparent" TextChanged="BooleanExpressionBox_TextChanged"/>
+                                                    </Border>
+                                                    <TextBlock Name="BooleanExpressionErrorText" Foreground="{StaticResource DangerBrush}"
+                                                               FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed"/>
+
+                                                    <TextBlock Text="Available tags (click to insert):" FontSize="10"
+                                                               Foreground="Gray" Margin="0,10,0,4"/>
+                                                    <ItemsControl Name="BooleanTagChipList">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Button Content="{Binding}" Style="{StaticResource CompactButton}"
+                                                                        FontSize="10" Padding="6,2" Margin="0,0,4,4"
+                                                                        Click="BooleanTagChip_Click" Tag="{Binding}"/>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+
+                                                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                                        <Button Content="Clear" Click="BooleanExpressionClear_Click"/>
+                                                        <Button Content="Close" Margin="8,0,0,0" Click="BooleanTagPopupClose_Click"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </Popup>
+                                    </StackPanel>
+                                </Border>
+
+                                <Button Style="{StaticResource CompactButton}" Content="Reset advanced filters"
+                                        HorizontalAlignment="Left" Margin="0,10,0,0" Click="ResetAdvancedFilters_Click"/>
+                            </StackPanel>
+                        </Expander>
+
+                        <Expander Margin="0,12,0,0" IsExpanded="True">
+                            <Expander.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Filter by type" VerticalAlignment="Center" FontWeight="Bold"/>
+                                    <TextBlock Name="TypeFilterTotalText" Text="(0 of 0)" Foreground="Gray" FontSize="11" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Expander.Header>
+                            <StackPanel Margin="4,8,0,4">
+                                <Expander IsExpanded="False" Margin="0,2">
+                                    <Expander.Header>
+                                        <CheckBox Name="ShowImagesBox" Content="Images" IsChecked="True" Click="ImageCategory_Click"/>
+                                    </Expander.Header>
+                                    <ItemsControl Name="ImageExtensionList" Margin="20,4,0,4">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                                          Checked="TypeFilter_Changed" Unchecked="TypeFilter_Changed" Margin="0,1" FontSize="11"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Expander>
+                                <Expander IsExpanded="False" Margin="0,6,0,0">
+                                    <Expander.Header>
+                                        <CheckBox Name="ShowVideosBox" Content="Videos" IsChecked="True" Click="VideoCategory_Click"/>
+                                    </Expander.Header>
+                                    <ItemsControl Name="VideoExtensionList" Margin="20,4,0,4">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                                          Checked="TypeFilter_Changed" Unchecked="TypeFilter_Changed" Margin="0,1" FontSize="11"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Expander>
+                                <Expander IsExpanded="False" Margin="0,6,0,0">
+                                    <Expander.Header>
+                                        <CheckBox Name="ShowAudioBox" Content="Audio" IsChecked="True" Click="AudioCategory_Click"/>
+                                    </Expander.Header>
+                                    <ItemsControl Name="AudioExtensionList" Margin="20,4,0,4">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                                          Checked="TypeFilter_Changed" Unchecked="TypeFilter_Changed" Margin="0,1" FontSize="11"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Expander>
+                                <Expander IsExpanded="False" Margin="0,6,0,0">
+                                    <Expander.Header>
+                                        <CheckBox Name="SizeFilterBox" Content="File Size"
+                                                  Checked="SizeFilter_Changed" Unchecked="SizeFilter_Changed"/>
+                                    </Expander.Header>
+                                    <StackPanel Margin="20,4,0,4">
+                                        <TextBlock Text="Hides files smaller than Min or larger than Max." TextWrapping="Wrap"
+                                                   Foreground="Gray" FontSize="10" Margin="0,0,0,6"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                            <TextBlock Text="Min" Width="30" VerticalAlignment="Center" FontSize="11"/>
+                                            <TextBox Name="SizeMinBox" Width="90" Margin="4,1" FontSize="11" MaxLength="16"
+                                                     VerticalContentAlignment="Center" TextChanged="SizeFilterText_Changed"/>
+                                            <ComboBox Name="SizeMinUnitCombo" Width="58" SelectedIndex="0"
+                                                      FontSize="11" SelectionChanged="SizeFilterUnit_Changed">
+                                                <ComboBoxItem Content="KB"/>
+                                                <ComboBoxItem Content="MB"/>
+                                                <ComboBoxItem Content="GB"/>
+                                            </ComboBox>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Max" Width="30" VerticalAlignment="Center" FontSize="11"/>
+                                            <TextBox Name="SizeMaxBox" Width="90" Margin="4,1" FontSize="11" MaxLength="16"
+                                                     VerticalContentAlignment="Center" TextChanged="SizeFilterText_Changed"/>
+                                            <ComboBox Name="SizeMaxUnitCombo" Width="58" SelectedIndex="1"
+                                                      FontSize="11" SelectionChanged="SizeFilterUnit_Changed">
+                                                <ComboBoxItem Content="KB"/>
+                                                <ComboBoxItem Content="MB"/>
+                                                <ComboBoxItem Content="GB"/>
+                                            </ComboBox>
+                                        </StackPanel>
+                                        <TextBlock Text="Leave either box empty for no limit on that side." TextWrapping="Wrap"
+                                                   Foreground="Gray" FontSize="10" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Expander>
+                            </StackPanel>
+                        </Expander>
+
+                    </StackPanel>
+                </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <!-- DragCompleted, not DragDelta: ShowsPreview defers the actual column resize
+                 until release, so DragDelta fires before the column has actually changed size.
+                 Widening the filter pane leaves less room for the preview pane too, so it
+                 needs the same clamp check as the splitter next to the preview pane does. -->
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#EEE" ShowsPreview="True"
+                          DragCompleted="Splitter_DragCompleted"/>
+
+            <!-- Center: thumbnail grid -->
+            <DockPanel Grid.Column="2">
+                <TextBlock DockPanel.Dock="Top" Margin="10,0,10,4" Foreground="Gray" FontSize="11"
+                           Text="Click to select · Ctrl+click or Shift+click for multiple · Right-click for Open / Tags / Move / Copy / Delete"/>
+
+                <!-- Folder browsing strip: only visible while Show Folders in Thumbnail Pane
+                     is on. A plain (non-virtualizing) WrapPanel is deliberate - a folder level
+                     is normally a few dozen entries at most, nowhere near what the custom
+                     VirtualizingWrapPanel exists to handle, so there is no reason to put
+                     folder tiles through that same fragile, hand-rolled code path too. -->
+                <Border Name="FolderBrowsingStrip" DockPanel.Dock="Top" Visibility="Collapsed"
+                        BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="10,8" Background="#FAFAFA">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <Button Name="UpDirectoryButton" Style="{StaticResource CompactButton}"
+                                    ToolTip="Go up to the parent folder" Click="UpDirectory_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#x2B06;" FontSize="13" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Parent Folder" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <TextBlock Name="BrowsingFolderText" Text="" VerticalAlignment="Center" Margin="10,0,0,0"
+                                       FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+
+                        <!-- Two rows tall, then scrolls. A folder with dozens of subfolders
+                             would otherwise push the file grid off the bottom of the window. -->
+                        <ScrollViewer MaxHeight="176" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl Name="FolderTileList">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Width="86" Height="84" Margin="4" Padding="4" BorderThickness="1" BorderBrush="Transparent"
+                                                Cursor="Hand" MouseLeftButtonUp="FolderTile_Click" Tag="{Binding}">
+                                            <StackPanel>
+                                                <Canvas Width="52" Height="44" HorizontalAlignment="Center">
+                                                    <Path Fill="#E8A317" Data="M2,7 A5,5 0 0 1 7,2 L18,2 A5,5 0 0 1 23,7 L23,12 L2,12 Z"/>
+                                                    <Path Fill="#E8A317" Data="M2,9 A4,4 0 0 1 6,5 L46,5 A4,4 0 0 1 50,9 L50,38 A4,4 0 0 1 46,42 L6,42 A4,4 0 0 1 2,38 Z"/>
+                                                    <Path Fill="#F4F5F7" Stroke="#C7CAD1" StrokeThickness="0.8" Data="M14,8 L26,8 A1.5,1.5 0 0 1 27.5,9.5 L27.5,24 L12.5,24 L12.5,9.5 A1.5,1.5 0 0 1 14,8 Z" RenderTransformOrigin="0.5,0.5">
+                                                        <Path.RenderTransform><RotateTransform Angle="-14"/></Path.RenderTransform>
+                                                    </Path>
+                                                    <Path Fill="#FFFFFF" Stroke="#C7CAD1" StrokeThickness="0.8" Data="M25,6 L37,6 A1.5,1.5 0 0 1 38.5,7.5 L38.5,24 L23.5,24 L23.5,7.5 A1.5,1.5 0 0 1 25,6 Z" RenderTransformOrigin="0.5,0.5">
+                                                        <Path.RenderTransform><RotateTransform Angle="8"/></Path.RenderTransform>
+                                                    </Path>
+                                                    <Rectangle Canvas.Left="27" Canvas.Top="10" Width="9" Height="6" Fill="#8FC7E8"/>
+                                                    <Path Fill="#FFC94A" Data="M2,16 L50,16 L50,38 A4,4 0 0 1 46,42 L6,42 A4,4 0 0 1 2,38 Z"/>
+                                                    <Path Fill="#F2B52E" Data="M2,16 L50,16 L50,19 L2,19 Z"/>
+                                                </Canvas>
+                                                <TextBlock Text="{Binding Name}" FontSize="10" TextWrapping="Wrap"
+                                                           TextAlignment="Center" Margin="0,2,0,0" MaxHeight="26"
+                                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <TextBlock Name="NoSubfoldersText" Text="No subfolders here." Foreground="Gray" FontSize="11"
+                                   Visibility="Collapsed" Margin="4,4,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- The ScrollViewer has to live INSIDE the ItemsControl's template, not
+                     wrap it from outside. A ScrollViewer wrapping an ItemsControl measures
+                     that ItemsControl with infinite height, so the panel never learns the
+                     real viewport size and can only guess how many rows to build. Putting
+                     it in the template makes the panel the ScrollViewer's direct content,
+                     which is what lets IScrollInfo work at all. -->
+                <ItemsControl Name="MediaItemsControl" Margin="10"
+                              VirtualizingPanel.IsVirtualizing="True">
+                        <ItemsControl.Template>
+                            <ControlTemplate TargetType="ItemsControl">
+                                <!-- Background="Transparent" is what makes the empty area
+                                     hit-testable; without it a click on blank space passes
+                                     straight through and raises nothing. Bubbling MouseUp,
+                                     not Preview: Preview tunnels down from here to the tile,
+                                     so it would fire on every tile click and clear the
+                                     selection the tile was about to make. -->
+                                <ScrollViewer x:Name="MediaScrollViewer"
+                                              VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled"
+                                              CanContentScroll="True"
+                                              Focusable="False"
+                                              Background="Transparent"
+                                              MouseLeftButtonUp="MediaBackground_MouseDown">
+                                    <ItemsPresenter/>
+                                </ScrollViewer>
+                            </ControlTemplate>
+                        </ItemsControl.Template>
+                        <!-- Swapped at runtime for a plain WrapPanel when virtualization is
+                             turned off in Settings. -->
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <ctl:VirtualizingWrapPanel ItemWidth="{Binding TileCellWidth, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                           ItemHeight="{Binding TileHeight, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <!-- Fixed height: the virtualizing panel assumes a uniform cell,
+                                     so a tile that sized itself to its filename would misplace rows. -->
+                                <Border Width="{Binding TileWidth, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        Height="{Binding TileContentHeight, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        Margin="6" Padding="6" BorderThickness="2"
+                                        MouseLeftButtonUp="MediaTile_Click"
+                                        MouseLeftButtonDown="MediaTile_MouseDown"
+                                        MouseRightButtonDown="MediaTile_RightClick"
+                                        Tag="{Binding}">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="White"/>
+                                            <Setter Property="BorderBrush" Value="#DDD"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                    <Setter Property="Background" Value="#DCEBFF"/>
+                                                    <Setter Property="BorderBrush" Value="#3B82F6"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Border.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Open with System Default" Click="OpenSelected_Click"/>
+                                            <MenuItem Header="Open in Pop-Up Window" Click="OpenInViewer_Click"/>
+                                            <MenuItem Header="Open containing folder" Click="OpenContainingFolder_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Add/Change Tags..." Click="AddTagsSelected_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Move to folder..." Click="MoveSelected_Click"/>
+                                            <MenuItem Header="Copy to folder..." Click="CopySelected_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Properties..." Click="FileProperties_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Delete" Click="DeleteSelected_Click"/>
+                                        </ContextMenu>
+                                    </Border.ContextMenu>
+                                    <StackPanel>
+                                        <Image Source="{Binding Thumbnail}" Stretch="Uniform"
+                                               Height="{Binding ThumbnailHeight, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                        <TextBlock Text="{Binding FileName}" TextWrapping="Wrap" FontSize="11" Margin="0,4,0,0"
+                                                   MaxHeight="28" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding TagsDisplay}" TextWrapping="Wrap" FontSize="10" Foreground="Gray"
+                                                   MaxHeight="24" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </DockPanel>
+
+            <GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#EEE" ShowsPreview="True"
+                          DragCompleted="Splitter_DragCompleted"/>
+
+            <!-- Right panel: selected file tag editor -->
+            <Border Grid.Column="4" BorderBrush="#DDD" BorderThickness="1,0,0,0" Padding="10" Name="RightPanelBorder" SizeChanged="RightPanelBorder_SizeChanged">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Name="FilesShownText" Text="0 of 0 Total Files Shown."
+                               Foreground="Gray" FontSize="11" Margin="0,0,0,10"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="Selected File" FontWeight="Bold"/>
+                        <TextBlock Name="SelectedCountText" Foreground="Gray" FontSize="11"
+                                   Margin="6,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock Name="SelectedFileNameText" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <TextBlock Name="SelectedFileMetaText" TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,2"/>
+                    <TextBlock Name="SelectedFileFolderText" TextWrapping="Wrap" Foreground="Gray" FontSize="10" Margin="0,0,0,10"/>
+
+                    <Expander Name="PreviewExpander" IsExpanded="True" Expanded="PreviewExpander_Expanded" Collapsed="PreviewExpander_Collapsed">
+                        <Expander.Header>
+                            <TextBlock Text="Preview" FontWeight="Bold"/>
+                        </Expander.Header>
+                        <StackPanel Margin="0,8,0,0">
+                            <!-- PreviewVideo is sized explicitly in code to the video's exact
+                                 aspect box and centred, rather than being left to fill the grid.
+                                 Filling meant VLC drew its own letterbox bars inside the surface,
+                                 and that hosted surface repaints out of step with the WPF layout
+                                 during a resize, leaving torn/stale black bands. Handing it a box
+                                 that already matches the aspect ratio means there are no bars to
+                                 draw, so there is nothing to smear. -->
+                            <Grid Name="PreviewGrid" Height="180" MinHeight="120" Margin="0,0,0,2" SizeChanged="PreviewGrid_SizeChanged">
+                                <Image Name="PreviewImage" Stretch="Uniform"/>
+                                <vlc:VideoView Name="PreviewVideo" Visibility="Collapsed"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,4">
+                                <TextBlock Name="PreviewScalePercentText" Text="Preview scale: --" Foreground="Gray" FontSize="10"/>
+                                <TextBlock Name="PreviewNativeSizeText" Foreground="#4A90D9" FontSize="10" Margin="4,0,0,0"
+                                           Cursor="Hand" TextDecorations="Underline" Visibility="Collapsed"
+                                           MouseLeftButtonDown="PreviewNativeSizeText_Click"
+                                           ToolTip="Click to expand the preview toward native resolution (click again to undo)"/>
+                            </StackPanel>
+                            <Slider Name="VideoPositionSlider" Minimum="0" Maximum="1" Visibility="Collapsed" Margin="0,2,0,2"
+                                    PreviewMouseLeftButtonDown="VideoSlider_DragStart" PreviewMouseLeftButtonUp="VideoSlider_DragEnd"
+                                    PreviewMouseMove="VideoSlider_PreviewMouseMove"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <Button Name="PlayPauseButton" Style="{StaticResource IconButton}" Content="Play" Width="55" Height="26" Click="PlayPauseButton_Click" Visibility="Collapsed"/>
+                                <Button Name="MuteButton" Style="{StaticResource IconButton}" Content="🔊" Width="30" Height="26" Margin="4,0,0,0" Click="MuteButton_Click" Visibility="Collapsed"/>
+                                <Slider Name="VolumeSlider" Minimum="0" Maximum="100" Value="100" Width="70" Margin="6,0,0,0"
+                                        Visibility="Collapsed" IsMoveToPointEnabled="True" ValueChanged="VolumeSlider_ValueChanged"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                                <CheckBox Name="AutoplayCheckBox" Content="Autoplay" IsChecked="True" VerticalAlignment="Center"/>
+                                <CheckBox Name="LoopCheckBox" Content="Loop" IsChecked="True" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+
+                    <Expander IsExpanded="True" Margin="0,12,0,0">
+                        <Expander.Header>
+                            <TextBlock Text="Tags" FontWeight="Bold"/>
+                        </Expander.Header>
+                        <StackPanel Margin="0,8,0,0">
+                            <TextBlock Text="Add Tags (space separated):" Margin="0,0,0,2"/>
+                            <Grid>
+                                <TextBox Name="TagsEditBox" Margin="0,0,0,8" AcceptsReturn="False"
+                                         TextChanged="TagsEditBox_TextChanged" PreviewKeyDown="TagsEditBox_PreviewKeyDown"/>
+                                <Popup Name="TagSuggestionPopup" PlacementTarget="{Binding ElementName=TagsEditBox}"
+                                       Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+                                    <Border Background="White" BorderBrush="#CCC" BorderThickness="1" MaxHeight="150" MinWidth="150">
+                                        <ListBox Name="TagSuggestionList" BorderThickness="0"
+                                                 PreviewMouseLeftButtonUp="TagSuggestion_Click"
+                                                 KeyDown="TagSuggestionList_KeyDown"/>
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                            <Button Style="{StaticResource CompactButton}" Content="Add Tags" Click="AddTags_Click"/>
+
+                            <Border BorderBrush="#DDD" BorderThickness="0,1,0,0" Margin="0,14,0,0" Padding="0,10,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="Remove Tags:" Margin="0,0,0,2"/>
+                                    <TextBlock Text="Check a tag to remove it from every selected file."
+                                               TextWrapping="Wrap" Foreground="Gray" FontSize="10" Margin="0,0,0,6"/>
+                                    <ItemsControl Name="RemoveTagList">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal" Margin="0,1">
+                                                    <CheckBox Content="{Binding Tag}" IsChecked="{Binding IsChecked, Mode=TwoWay}" FontSize="11"/>
+                                                    <TextBlock Text="{Binding CountLabel}" Foreground="Gray" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Name="NoRemovableTagsText" Text="No tags on the current selection." Foreground="Gray" FontSize="11" Margin="0,2,0,0"/>
+                                    <Button Name="RemoveTagsButton" Style="{StaticResource CompactButton}" Content="Remove Tags" Margin="0,8,0,0" Click="RemoveTags_Click" IsEnabled="False"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border BorderBrush="#DDD" BorderThickness="0,1,0,0" Margin="0,14,0,0" Padding="0,10,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="Autocomplete Tags From:" Margin="0,0,0,4"/>
+                                    <CheckBox Name="AutocompleteFromFolderBox" Content="Current Folder(s)" IsChecked="True"
+                                              Margin="0,0,0,4" Checked="AutocompleteSource_Changed" Unchecked="AutocompleteSource_Changed"/>
+                                    <CheckBox Name="AutocompleteFromLibraryBox" Content="Tag Library" IsChecked="True"
+                                              Margin="0,0,0,8" Checked="AutocompleteSource_Changed" Unchecked="AutocompleteSource_Changed"/>
+                                    <Button Style="{StaticResource CompactButton}" Content="Tag Library..." Click="TagLibrary_Click"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Expander>
+
+                    <Expander Margin="0,16,0,0">
+                        <Expander.Header>
+                            <TextBlock Text="Organise Into Folders" FontWeight="Bold"/>
+                        </Expander.Header>
+                        <StackPanel Margin="0,8,0,0">
+                            <TextBlock Text="Files are grouped into a subfolder named after the tag(s) currently checked on the left." TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"/>
+                            <Button Style="{StaticResource CompactButton}" Content="Organize Visible Files..." Click="Organize_Click"/>
+                            <TextBlock Text="Moves the files currently shown (after filters) into subfolders you choose." TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </Expander>
+
+                    <Expander Margin="0,16,0,0">
+                        <Expander.Header>
+                            <TextBlock Text="Duplicate Tools" FontWeight="Bold"/>
+                        </Expander.Header>
+                        <StackPanel Margin="0,8,0,0">
+                            <TextBlock Text="Finds videos with matching content even when resolution, compression, cropping or length differ." TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"/>
+                            <Button Style="{StaticResource CompactButton}" Content="Duplicate Finder..." Click="DuplicateFinder_Click"/>
+                            <TextBlock Text="Opens in its own window; scans a folder you pick there, independently of the files loaded here." TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </Expander>
+                </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <!-- Footer: version + changelog -->
+        <Grid Grid.Row="2" Margin="10,4">
+            <!-- Changelog moved to Settings > About; the footer just states the version. -->
+            <TextBlock HorizontalAlignment="Right" Foreground="Gray" FontSize="11">
+                <Run Text="v0.59b"/>
+            </TextBlock>
+        </Grid>
+    </Grid>
+</Window>

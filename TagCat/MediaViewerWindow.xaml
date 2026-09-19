@@ -1,0 +1,132 @@
+<Window x:Class="MediaTagger.MediaViewerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
+        Title="TagCat — Viewer" Height="720" Width="1080"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="#111111"
+        FontSize="12.5"
+        PreviewKeyDown="Viewer_KeyDown"
+        MouseMove="Viewer_MouseMove"
+        Closed="Viewer_Closed">
+
+    <!-- Everything sits INSIDE the VideoView rather than beside it. VideoView hosts a
+         native video surface, and WPF cannot draw over one of those - any sibling element
+         placed on top is simply hidden behind the video (the "airspace" limitation).
+         LibVLCSharp handles this by rendering a VideoView's Content in a layer above the
+         video, so the controls have to live there to be visible at all.
+
+         It also stays permanently visible for the same reason: collapsing it for images and
+         audio would take the overlay - and therefore every control - with it. For those the
+         video surface is just an unused black backdrop. -->
+    <vlc:VideoView Name="ViewerVideo">
+        <Grid Name="RootGrid" Background="Transparent"
+              MouseMove="Viewer_MouseMove"
+              PreviewMouseDown="Viewer_MouseMove"
+              PreviewMouseWheel="Viewer_MouseWheel">
+
+            <!-- Images draw in the overlay layer too, above the idle video surface. -->
+            <Image Name="ViewerImage" Stretch="Uniform" Visibility="Collapsed"/>
+
+            <!-- Shown for audio, which has no picture of its own. -->
+            <StackPanel Name="AudioPlaceholder" Visibility="Collapsed"
+                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="&#x266B;" FontSize="96" Foreground="#555" HorizontalAlignment="Center"/>
+                <TextBlock Name="AudioTitleText" Foreground="#AAA" FontSize="15" Margin="0,12,0,0"
+                           HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="600"/>
+            </StackPanel>
+
+            <!-- Previous / next click targets down the left and right edges. Transparent
+                 backgrounds so they're hit-testable without obscuring the media. -->
+            <Border Name="PrevHitZone" Width="72" HorizontalAlignment="Left" Background="Transparent"
+                    Cursor="Hand" MouseLeftButtonUp="Previous_Click">
+                <TextBlock Name="PrevGlyph" Text="&#x2039;" FontSize="52" Foreground="#DDD"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.75"/>
+            </Border>
+            <Border Name="NextHitZone" Width="72" HorizontalAlignment="Right" Background="Transparent"
+                    Cursor="Hand" MouseLeftButtonUp="Next_Click">
+                <TextBlock Name="NextGlyph" Text="&#x203A;" FontSize="52" Foreground="#DDD"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.75"/>
+            </Border>
+
+            <!-- Top bar: filename and position in the list. -->
+            <Border Name="TopBar" VerticalAlignment="Top" Background="#CC000000" Padding="14,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Name="ViewerFileNameText" Foreground="White" FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <TextBlock Name="ViewerPositionText" Foreground="#AAA" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <Button Name="FullScreenButton" Content="Full Screen" Height="26" Padding="10,0" FontSize="12"
+                                Background="#33FFFFFF" Foreground="White" BorderThickness="0"
+                                ToolTip="Full screen (F11) — Esc exits" Click="FullScreen_Click"/>
+                        <Button Content="&#x2715;" Width="30" Height="26" FontSize="14" Margin="8,0,0,0"
+                                Background="#33FFFFFF" Foreground="White" BorderThickness="0"
+                                ToolTip="Close" Click="CloseViewer_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Bottom bar: playback controls. Hidden entirely for images, which have nothing
+                 to play. -->
+            <Border Name="BottomBar" VerticalAlignment="Bottom" Background="#CC000000" Padding="14,10">
+                <StackPanel>
+                    <Slider Name="ViewerPositionSlider" Minimum="0" Maximum="1" Margin="0,0,0,8"
+                            PreviewMouseLeftButtonDown="ViewerSlider_DragStart"
+                            PreviewMouseLeftButtonUp="ViewerSlider_DragEnd"
+                            PreviewMouseMove="ViewerSlider_PreviewMouseMove"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Name="ViewerPlayPauseButton" Content="Play" Width="64" Padding="4"
+                                Click="ViewerPlayPause_Click"/>
+                        <Button Name="ViewerMuteButton" Content="&#x1F50A;" Width="34" Padding="2" Margin="6,0,0,0"
+                                Click="ViewerMute_Click"/>
+                        <Slider Name="ViewerVolumeSlider" Minimum="0" Maximum="100" Value="100" Width="90"
+                                Margin="6,0,0,0" IsMoveToPointEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="ViewerVolume_ValueChanged"/>
+                        <TextBlock Name="ViewerTimeText" Foreground="#CCC" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                        <!-- A plain CheckBox here inherits the system theme's default chrome,
+                             which assumes a light background and renders faint/greyish
+                             against this bar's black - Foreground alone doesn't reliably fix
+                             that, since the theme's own template controls more of the visual
+                             weight than just the text color. This template draws the box,
+                             checkmark and label explicitly instead, so nothing here depends
+                             on theme assumptions. -->
+                        <CheckBox Name="ViewerLoopBox" VerticalAlignment="Center" Margin="18,0,0,0" Cursor="Hand">
+                            <CheckBox.Template>
+                                <ControlTemplate TargetType="CheckBox">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Name="Box" Width="15" Height="15" BorderBrush="White"
+                                                BorderThickness="1.5" CornerRadius="2" Background="Transparent"
+                                                VerticalAlignment="Center">
+                                            <Path Name="Check" Data="M 2,7 L 6,11 L 13,2" Stroke="White"
+                                                  StrokeThickness="2" StrokeStartLineCap="Round"
+                                                  StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                                  Visibility="Collapsed"/>
+                                        </Border>
+                                        <TextBlock Text="Loop" Foreground="White" FontSize="13"
+                                                   FontWeight="SemiBold" Margin="6,0,0,0"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </CheckBox.Template>
+                        </CheckBox>
+                        <!-- Plain text rather than a glyph: the unicode full-screen symbol
+                             renders faintly and inconsistently depending on the installed
+                             fonts, which made the button hard to make out. -->
+                        <Button Name="BottomFullScreenButton" Content="Full Screen" Padding="10,3" Margin="18,0,0,0"
+                                ToolTip="Full screen (F11)" Click="FullScreen_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </vlc:VideoView>
+</Window>

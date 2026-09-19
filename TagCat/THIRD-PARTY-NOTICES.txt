@@ -1,0 +1,69 @@
+TagCat - Third-Party Notices
+============================
+
+TagCat's own source code is under the MIT License (see LICENSE). The components
+below are not TagCat's work and carry their own terms.
+
+
+LibVLC
+------
+Copyright (c) VideoLAN and VLC Authors
+Licence: LGPL-2.1-or-later
+https://www.videolan.org/vlc/
+Package: VideoLAN.LibVLC.Windows
+
+LibVLCSharp / LibVLCSharp.WPF
+-----------------------------
+Copyright (c) VideoLAN
+Licence: LGPL-2.1-or-later
+https://code.videolan.org/videolan/LibVLCSharp
+(Also available under a commercial licence from Videolabs.)
+
+Microsoft.Data.Sqlite and SQLitePCLRaw
+--------------------------------------
+Copyright (c) .NET Foundation and Contributors
+Licence: MIT / Apache-2.0
+https://github.com/dotnet/efcore
+https://github.com/ericsink/SQLitePCL.raw
+
+.NET Runtime and Windows SDK projections
+----------------------------------------
+Copyright (c) Microsoft Corporation
+Licence: MIT
+https://github.com/dotnet/runtime
+
+
+What the LGPL means here
+========================
+
+LibVLC and LibVLCSharp are LGPL-2.1-or-later. Unlike the GPL, the LGPL does not
+require the application using the library to adopt the same licence, so TagCat's
+own code can be MIT. What it does require, in return, is roughly:
+
+1. Say so. The licence and the fact that these components are used must be
+   disclosed - which is what this file is for.
+
+2. Keep the library replaceable. LibVLC must stay dynamically linked, as separate
+   .dll files a user could swap for their own build. TagCat does this already: it
+   loads LibVLC at runtime from ordinary DLLs alongside the executable, or from a
+   VLC installation already on the machine. It is not statically linked or merged
+   into the executable, and it must not be.
+
+3. Make the source available. Anyone receiving a build that includes LibVLC is
+   entitled to LibVLC's source. VideoLAN publishes it at the addresses above,
+   and pointing there satisfies this.
+
+The single-file build produced by MAKE-EXE.bat bundles LibVLC's DLLs inside the
+executable. They are still separate libraries extracted at runtime rather than
+statically linked, but if you intend to distribute that build widely rather than
+the installer, it is worth getting a second opinion on whether it meets the
+relinkability requirement - the installer build, which keeps the DLLs as ordinary
+files, plainly does.
+
+ffmpeg is deliberately NOT bundled. The Duplicate Finder will use an ffmpeg
+already present on the machine as a last-resort decoder, but TagCat never ships
+or downloads it, which keeps its GPL/LGPL terms out of scope entirely.
+
+This is a plain-language summary for orientation, not legal advice, and it was
+not written by a lawyer. If TagCat is ever distributed commercially or at scale,
+the licence texts themselves are what govern.

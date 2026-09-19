@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+
+    <!--
+      net9.0-windows10.0.19041.0, not plain net9.0-windows: the merged Video Duplicate
+      Finder decodes frames via WinRT (Windows.Media.Editing, Windows.Graphics.Imaging,
+      Windows.Storage), and those namespaces are only projected when a Windows SDK
+      version is pinned here. The module targeted net8.0 with the same SDK pin before
+      the merge; only the .NET version moved.
+    -->
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+
+    <!--
+      ImplicitUsings stays OFF on purpose. The dedupe module was built with it on, but
+      this project also sets UseWindowsForms, and the WinForms SDK injects
+      "global using System.Windows.Forms" when implicit usings are enabled - which makes
+      MessageBox, Application, Button, MenuItem and friends ambiguous against their WPF
+      namesakes throughout TagCat. Every merged file already carries explicit
+      usings, so nothing needs it.
+    -->
+    <ImplicitUsings>disable</ImplicitUsings>
+
+    <!-- The Media Foundation frame extractor talks to COM with raw pointers. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+
+    <ApplicationIcon></ApplicationIcon>
+    <AssemblyName>TagCat</AssemblyName>
+    <RootNamespace>MediaTagger</RootNamespace>
+    <Platforms>x64</Platforms>
+
+    <Version>0.59</Version>
+    <AssemblyVersion>0.59.0.0</AssemblyVersion>
+    <FileVersion>0.59.0.0</FileVersion>
+    <InformationalVersion>0.59b</InformationalVersion>
+
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LibVLCSharp" Version="3.10.0" />
+    <PackageReference Include="LibVLCSharp.WPF" Version="3.10.0" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.23.1" />
+
+    <!-- Fingerprint cache for the duplicate finder. Bumped 8.x -> 9.x to match the
+         runtime; MIT licensed, which matters for commercial redistribution. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,220 @@
+<Application x:Class="MediaTagger.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+
+        <!-- Shared design system, adopted from the Video Duplicate Finder module when it
+             was merged in, so both windows read as one application. Anything TagCat
+             specific is added at the bottom rather than by editing the block below, which
+             keeps this diffable against the module's original styles. -->
+
+
+        <!-- ============ Palette ============
+             One accent colour carries every "this is the important action" cue.
+             Everything else stays neutral so the accent keeps its meaning. -->
+        <SolidColorBrush x:Key="AccentBrush" Color="#2F6FED"/>
+        <SolidColorBrush x:Key="AccentSoftBrush" Color="#EAF1FF"/>
+        <SolidColorBrush x:Key="AccentBorderBrush" Color="#B9CFFA"/>
+
+        <SolidColorBrush x:Key="DangerBrush" Color="#C4392B"/>
+        <SolidColorBrush x:Key="DangerSoftBrush" Color="#FBEAE8"/>
+
+        <SolidColorBrush x:Key="SuccessBrush" Color="#1D7A4F"/>
+        <SolidColorBrush x:Key="WarningBrush" Color="#A65200"/>
+        <SolidColorBrush x:Key="WarningSoftBrush" Color="#FBF1E4"/>
+
+        <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#FAFAF8"/>
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#E1E0DA"/>
+        <SolidColorBrush x:Key="BorderStrongBrush" Color="#C9C8C1"/>
+
+        <SolidColorBrush x:Key="TextBrush" Color="#232220"/>
+        <SolidColorBrush x:Key="MutedTextBrush" Color="#706F6A"/>
+        <SolidColorBrush x:Key="FaintTextBrush" Color="#9A9992"/>
+
+        <!-- ============ Spacing scale ============
+             Not resources consumed elsewhere — a record of the convention: every
+             margin in the window is 4, 8, 14 or 20, so the layout reads as
+             deliberate rather than approximate. -->
+        <sys:Double x:Key="SpaceXS">4</sys:Double>
+        <sys:Double x:Key="SpaceS">8</sys:Double>
+        <sys:Double x:Key="SpaceM">14</sys:Double>
+        <sys:Double x:Key="SpaceL">20</sys:Double>
+
+        <CornerRadius x:Key="CardRadius">8</CornerRadius>
+        <CornerRadius x:Key="ControlRadius">6</CornerRadius>
+
+        <!-- ============ Buttons ============ -->
+
+        <!-- Shared template: every button style below only swaps colours on top of this. -->
+        <ControlTemplate x:Key="ButtonTemplateBase" TargetType="Button">
+            <Border x:Name="Bg"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{StaticResource ControlRadius}">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Margin="{TemplateBinding Padding}"/>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Bg" Property="Opacity" Value="0.88"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter TargetName="Bg" Property="Opacity" Value="0.75"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter TargetName="Bg" Property="Opacity" Value="0.45"/>
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <!-- Default: secondary/neutral. Used for Browse, Cancel, Play, Folder, etc. -->
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="MinWidth" Value="88"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template" Value="{StaticResource ButtonTemplateBase}"/>
+        </Style>
+
+        <!-- The one call to action per screen — Scan. -->
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="18,9"/>
+        </Style>
+
+        <!-- Deletion. Red is used nowhere else, so it only ever means this. -->
+        <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="{StaticResource DangerBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="16,8"/>
+        </Style>
+
+        <!-- Low-emphasis utility actions (Test one file, View log). Text-like, so they
+             don't visually compete with Scan for attention. -->
+        <Style x:Key="LinkButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template" Value="{StaticResource ButtonTemplateBase}"/>
+        </Style>
+
+        <!-- ============ Preset selection cards ============
+             RadioButtons re-skinned as selectable cards rather than dot-and-label,
+             since "pick one of three modes" reads more clearly as cards. -->
+        <Style x:Key="PresetCard" TargetType="RadioButton">
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd"
+                                Background="{StaticResource SurfaceBrush}"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="1.5"
+                                CornerRadius="{StaticResource ControlRadius}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBorderBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSoftBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ============ Text ============ -->
+
+        <Style TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        </Style>
+
+        <Style x:Key="SectionHeading" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <Style x:Key="Muted" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
+            <Setter Property="FontSize" Value="11.5"/>
+        </Style>
+
+        <Style x:Key="Faint" TargetType="TextBlock" BasedOn="{StaticResource Muted}">
+            <Setter Property="Foreground" Value="{StaticResource FaintTextBrush}"/>
+        </Style>
+
+        <!-- ============ Cards / panels ============ -->
+
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="{StaticResource CardRadius}"/>
+        </Style>
+
+        <Style TargetType="Expander">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="12.5"/>
+        </Style>
+        <!-- ============ TagCat additions ============ -->
+
+        <!-- Pre-dates the shared design system; kept because the tag filter list binds to it. -->
+        <Style x:Key="TagCheck" TargetType="CheckBox">
+            <Setter Property="Margin" Value="4,2"/>
+        </Style>
+
+        <!-- The implicit Button style above sets MinWidth 88, which is right for the
+             dedupe window's command buttons but would inflate TagCat's small
+             icon buttons (e.g. the refresh glyph) to eleven times their intended width.
+             Icon buttons opt out via this style rather than the base one being weakened. -->
+        <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+        </Style>
+
+        <!-- TagCat's panels are dense checklists, so the roomy default button
+             padding/margin would push the layout around. Compact is the panel default. -->
+        <Style x:Key="CompactButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="Margin" Value="0"/>
+        </Style>
+
+        <!-- TagCat relies on TextBlock wrapping in narrow side panels; the shared
+             implicit style centres text vertically, which is fine, but wrapped blocks in
+             a stack read better top-aligned. -->
+        <Style x:Key="WrapText" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+        </Style>
+
+    </Application.Resources>
+</Application>
