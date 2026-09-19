@@ -1,0 +1,19 @@
+# Build output
+bin/
+obj/
+
+# Packaging output - these are Release assets, not repository files.
+# A binary committed here stays in git history permanently.
+InstallerPackage/
+StandaloneApp/
+Output/
+*.exe
+
+# IDE
+.vs/
+*.user
+*.suo
+
+# OS
+Thumbs.db
+.DS_Store0
