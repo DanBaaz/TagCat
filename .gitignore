@@ -9,6 +9,26 @@ StandaloneApp/
 Output/
 *.exe
 
+# ---------------------------------------------------------------------------
+# Installer tooling - deliberately kept out of the public repository.
+#
+# This is so the only TagCat installer in circulation is the official one from
+# the Releases page. It does NOT stop anyone building or running the app: the
+# source is all here and `dotnet build` works fine. It only means there is no
+# ready-made script for producing an installer that looks official.
+#
+# NOTE TO SELF: these files exist only on your own machine now. If you ever
+# re-clone this repo onto a new computer they will NOT come with it, so keep a
+# backup somewhere outside the repo.
+# ---------------------------------------------------------------------------
+TagCat.iss
+BUILD-RELEASE.bat
+MAKE-INSTALLER-PACKAGE.bat
+MAKE-EXE.bat
+Install.bat
+Install.ps1
+ExtractLibVlc.ps1
+
 # IDE
 .vs/
 *.user
@@ -16,4 +36,4 @@ Output/
 
 # OS
 Thumbs.db
-.DS_Store0
+.DS_Store
