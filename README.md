@@ -29,6 +29,9 @@ what's missing:
 It will tell you what it's about to download and ask before doing it. Declining still installs
 TagCat; you'd just need to install the missing piece yourself afterwards.
 
+The AI Tagger's models are **not** part of the installer. They're only downloaded if and when
+you choose to use it.
+
 **Requirements:** Windows 10 or 11, 64-bit.
 
 Uninstall via **Settings → Apps → Installed apps**, or right-click TagCat in the Start Menu.
@@ -106,6 +109,33 @@ Four scan modes:
 - **Exclude folders and files** from scanning, either for one session or permanently.
 - Files that couldn't be read are listed rather than silently skipped.
 
+### AI Tagger
+
+Looks at your photos and videos and suggests tags for them. It runs entirely on your own
+computer — nothing you're looking at is uploaded anywhere. Open it from **AI Tag
+Suggestions** in the right-hand panel.
+
+Two methods, usable alone or together:
+
+| Method | Suggests | Needs |
+|---|---|---|
+| **Match My Tags - Light** | Tags you already use, scored by how well each fits | A one-time model download (~600 MB) |
+| **Match My Tags - Heavy** | The same, using OpenAI's largest CLIP model — slower, noticeably more accurate | A one-time model download (~1.7 GB) |
+| **Describe & suggest** | New tag ideas too, in its own words | The free [Ollama](https://ollama.com) app and a vision model |
+
+- Uses your graphics card if you have one (NVIDIA, AMD or Intel), otherwise the processor.
+- **Learn from my library** teaches Match my tags what *your* tags look like, from files you've
+  already tagged — including personal ones like a person's name or a favourite place, as long
+  as they're something visible. A tag needs 5 or more tagged files; run it again as you tag
+  more. Tags that aren't about what's on screen (like "favourite") are detected and left out.
+- A live **sensitivity** slider decides how confident a match must be — move it and the
+  suggestions update straight away, no rescan.
+- Suggestions are labelled **Your tags**, **New**, or **Both** (when both methods agree),
+  with a video preview, sorting, and a tag filter to review them quickly.
+- Nothing changes until you tick suggestions and apply them — and **Ctrl+Z** undoes it.
+- It can only judge what it can *see*: "beach" or "dog" work well; names or "favourite"
+  can't be known from a picture.
+
 ### Caching
 
 Thumbnails and video fingerprints are cached, so reopening a folder or rescanning is fast.
@@ -118,9 +148,20 @@ to delete at any time — they just rebuild.
 
 - **Windows only.** It leans on Windows Shell APIs for thumbnails and Windows codecs for
   decoding, so there's no Mac or Linux version.
-- **Codec support is whatever Windows provides.** JPEG, PNG, BMP, GIF and TIFF always work;
-  HEIC and WebP need the relevant Windows codec installed. Files that can't be decoded are
-  reported, not silently ignored.
+- **Every supported file type can always be tagged, renamed, sorted and played.** Tagging never
+  opens the file's contents, and playback uses its own built-in decoders, so neither depends
+  on what Windows has installed.
+- **Thumbnails, and the Duplicate Finder's photo scanning, use Windows' own image support.**
+  JPEG, PNG, BMP, GIF and TIFF always work. Some formats need a free add-on from the Microsoft
+  Store before Windows can read them — until then those files just show a plain icon instead
+  of a thumbnail, and nothing else is affected:
+  - **HEIC/HEIF** (common from iPhones) — needs *HEIF Image Extensions* and
+    *HEVC Video Extensions*. TagCat offers to open the Store for you the first time it meets one.
+  - **WebP** — built into Windows 11; older Windows 10 may need *WebP Image Extensions*.
+  - **WebM** videos — thumbnails may need *Web Media Extensions*; they always play regardless.
+
+  Windows "N" editions (sold in Europe without media features) are missing more of these by
+  default. Audio files show a generic icon rather than a thumbnail — that's normal.
 - **Perceptual audio matching isn't implemented.** Express finds identical audio files by
   checksum, but there's no equivalent of the video matching that would find the same song at a
   different bitrate. That needs a genuinely different approach (spectrogram-based hashing).
@@ -133,9 +174,14 @@ to delete at any time — they just rebuild.
 
 TagCat's own code is [MIT](LICENSE) — use it however you like.
 
-It's built on LibVLC and LibVLCSharp, which are LGPL-2.1-or-later, and ships with a few
-MIT-licensed Microsoft components. See [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)
-for the full list.
+It's built on LibVLC and LibVLCSharp (LGPL-2.1-or-later) and ships with Microsoft's ONNX
+Runtime (MIT) and DirectML (Microsoft's own redistributable licence). See
+[THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) for the full list.
+
+**AI models aren't included.** Match my tags downloads OpenAI's CLIP model from Hugging Face
+when you first use it. OpenAI's CLIP code is MIT-licensed and the model is widely labelled MIT,
+though OpenAI's own model page doesn't state a licence for it explicitly. Describe & suggest uses
+whatever vision models you choose to install in Ollama, each under its own licence.
 
 ffmpeg is deliberately not bundled. The Duplicate Finder will use one already installed on
 your machine as a fallback decoder, but TagCat never ships or downloads it.
