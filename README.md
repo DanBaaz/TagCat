@@ -29,6 +29,11 @@ what's missing:
 It will tell you what it's about to download and ask before doing it. Declining still installs
 TagCat; you'd just need to install the missing piece yourself afterwards.
 
+The installer can also add **Open in TagCat** to File Explorer's right-click menu (optional,
+on by default) — for folders, the empty space inside a folder, and photo, video and audio files.
+If TagCat is already open, it opens there rather than in a second window. On Windows 11 it's
+under **Show more options**.
+
 The AI Tagger's models are **not** part of the installer. They're only downloaded if and when
 you choose to use it.
 
@@ -158,7 +163,9 @@ to delete at any time — they just rebuild.
   - **HEIC/HEIF** (common from iPhones) — needs *HEIF Image Extensions* and
     *HEVC Video Extensions*. TagCat offers to open the Store for you the first time it meets one.
   - **WebP** — built into Windows 11; older Windows 10 may need *WebP Image Extensions*.
-  - **WebM** videos — thumbnails may need *Web Media Extensions*; they always play regardless.
+  - **WebM** videos — WebM can hold VP9 or AV1 video. VP9 thumbnails need *VP9 Video Extensions*,
+    which Windows usually has already; AV1 needs the free *AV1 Video Extension*. TagCat offers to
+    open the Store for it the first time a WebM thumbnail fails. They always play regardless.
 
   Windows "N" editions (sold in Europe without media features) are missing more of these by
   default. Audio files show a generic icon rather than a thumbnail — that's normal.
